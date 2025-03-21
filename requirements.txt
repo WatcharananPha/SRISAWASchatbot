@@ -5,3 +5,4 @@ langchain
 langchain-openai
 huggingface-hub
 langchain-community
+sentence-transformers
