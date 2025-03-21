@@ -4,3 +4,4 @@ llama-parse
 langchain
 langchain-openai
 huggingface-hub
+langchain-community
