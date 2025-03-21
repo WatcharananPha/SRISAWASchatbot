@@ -6,3 +6,5 @@ langchain-openai
 huggingface-hub
 langchain-community
 sentence-transformers
+faiss-cpu
+faiss-gpu
