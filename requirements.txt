@@ -1,3 +1,6 @@
-llama-index 
-llama-parse 
-python-dotenv
+streamlit
+nest-asyncio
+llama-parse
+langchain
+langchain-openai
+huggingface-hub
