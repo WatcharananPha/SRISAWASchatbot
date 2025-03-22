@@ -89,7 +89,7 @@ def get_vector_database(uploaded_files=None):
     return None
 
 def create_chatbot(vector_db):
-    retriever = vector_db.as_retriever(search_kwargs={'k': 3}) if vector_db else None
+    retriever = vector_db.as_retriever(search_kwargs={'k': 5}) if vector_db else None
     template = """
     You are an AI assistant specializing in providing information about SriSawat Company.
     Use the following context to answer the question.

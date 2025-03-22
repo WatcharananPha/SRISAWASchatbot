@@ -6,20 +6,9 @@
 
 `pip install -r requirements.txt`
 
-## Model Class
+## Running the application
 
-`FraudRGCN` class in [`fgnn/fraud_detector.py`](fgnn/fraud_detector.py) 
-implements model for supervised fraud detection using Relational 
-Graph Convolutional Network (RGCN). The model is implemented with PyTorch
-and Deep Graph Library. Class methods support full lifecycle of the
-model:
-
-* `train_fg(train_transactions, params=None, test_mask=None)` Model training. Trains RGCN model on
-transactions in `train_transactions` DataFrame. Default model parameters can be overloaded
-by passing them in a dictionary `params`. Model parameters are described below. 
-When array `test_mask` is passed, it is used to identify test transactions in `train_transactions`, 
-and the model will be trained in transductive mode by masking out fraud labels of test transactions 
-identified with `True` values in `test_mask`. 
+* `streamlit run app.py`
 
 
 * `predict(test_transactions, k=2)` Model inference. Returns fraud probabilities
