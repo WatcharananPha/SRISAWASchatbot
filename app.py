@@ -38,12 +38,10 @@ FAISS_INDEX_PATH = "faiss_index\index.faiss"
 
 def process_uploaded_files(uploaded_files):
     all_text = ""
-    
     for uploaded_file in uploaded_files:
         file_path = f"temp_{uploaded_file.name}"
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getvalue())
-
         if file_path.lower().endswith('.txt'):
             with open(file_path, 'r', encoding='utf-8') as f:
                 all_text += f.read() + "\n"
@@ -51,7 +49,6 @@ def process_uploaded_files(uploaded_files):
             documents = parser.load_data(file_path)
             for doc in documents:
                 all_text += doc.text_resource.text + "\n"
-
         os.remove(file_path)
     
     return all_text
