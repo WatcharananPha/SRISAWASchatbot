@@ -22,8 +22,8 @@ llm = ChatOpenAI(
     openai_api_key="sk-GqA4Uj6iZXaykbOzIlFGtmdJr6VqiX94NhhjPZaf81kylRzh",
     openai_api_base="https://api.opentyphoon.ai/v1",
     model_name="typhoon-v2-70b-instruct",
-    temperature=0.7,
-    max_tokens=1024
+    temperature=1.0,
+    max_tokens=8192,
 )
 
 parser = LlamaParse(
