@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import nest_asyncio
+import time
 from llama_parse import LlamaParse
 from langchain.vectorstores import FAISS
 from langchain_openai import ChatOpenAI
@@ -159,7 +160,7 @@ def main():
         if vector_db:
             chatbot = create_chatbot(vector_db)
             if chatbot:
-                response = chatbot({"query": user_input})["result"]
+                response = chatbot({"query": user_input})["result"] 
             else:
                 response = "I'm unable to retrieve relevant data, but I'll do my best!"
             st.session_state.memory.save_context(
@@ -167,7 +168,11 @@ def main():
                 {"result": response}
             )
         with st.chat_message("assistant"):
-            st.markdown(response)
+            message_placeholder = st.empty()
+            full_response = response
+            for i in range(len(full_response)):
+                message_placeholder.markdown(full_response[:i+1])
+                time.sleep(0.02)
         st.session_state.messages.append({"role": "assistant", "content": response})
 
 if __name__ == "__main__":
