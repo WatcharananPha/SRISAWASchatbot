@@ -9,6 +9,7 @@ from langchain.prompts import PromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.memory import ConversationBufferMemory
 
 nest_asyncio.apply()
 
@@ -34,7 +35,16 @@ parser = LlamaParse(
     language="en",
 )
 
-FAISS_INDEX_PATH = "faiss_index\index.faiss"
+if "memory" not in st.session_state:
+    st.session_state.memory = ConversationBufferMemory(
+        return_messages=True,
+        memory_key="chat_history",
+        input_key="query",
+        output_key="result",
+        k=5
+    )
+
+FAISS_INDEX_PATH = "faiss_index/index.faiss"
 
 def process_uploaded_files(uploaded_files):
     all_text = ""
@@ -88,7 +98,7 @@ def get_vector_database(uploaded_files=None):
 def create_chatbot(vector_db):
     retriever = vector_db.as_retriever(search_kwargs={'k': 5}) if vector_db else None
     template = """
-    You are an AI assistant specializing in providing information about SriSawat Company.
+    You are an AI assistant specializing in providing information about SriSawad Company.
     Use the following context to answer the question.
     
     If you don't know the answer, say "I don't know."
@@ -99,13 +109,19 @@ def create_chatbot(vector_db):
     Answer:
     """
     
-    PROMPT = PromptTemplate(template=template, input_variables=["context", "question"])
+    PROMPT = PromptTemplate(
+        template=template, 
+        input_variables=["context", "question"]
+    )
 
     return RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",
         retriever=retriever,
-        chain_type_kwargs={"prompt": PROMPT}
+        memory=st.session_state.memory,
+        chain_type_kwargs={
+            "prompt": PROMPT
+        }
     ) if retriever else None
 
 def main():
@@ -122,25 +138,34 @@ def main():
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
+        
     with st.spinner('Loading knowledge base...'):
         vector_db = get_vector_database(uploaded_files)
+        
     if not vector_db and os.path.exists(FAISS_INDEX_PATH):
         st.warning("Failed to load the FAISS index. Please try re-uploading files.")
+
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
     user_input = st.chat_input("Ask me anything...")
 
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
-    
+
         if vector_db:
             chatbot = create_chatbot(vector_db)
-            response = chatbot.run(user_input) if chatbot else "I'm unable to retrieve relevant data, but I'll do my best!"
-        else:
-            response = llm.predict(user_input)
+            if chatbot:
+                response = chatbot({"query": user_input})["result"]
+            else:
+                response = "I'm unable to retrieve relevant data, but I'll do my best!"
+            st.session_state.memory.save_context(
+                {"query": user_input}, 
+                {"result": response}
+            )
         with st.chat_message("assistant"):
             st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
