@@ -99,8 +99,8 @@ def get_vector_database(uploaded_files=None):
 def create_chatbot(vector_db):
     retriever = vector_db.as_retriever(search_kwargs={'k': 5}) if vector_db else None
     template = """
-    You are an AI assistant specializing in providing information about SriSawad Company.
-    Use the following context to answer the question.
+    You are an AI assistant specializing in providing information about SriSawad Company. Can add context to response
+    Use the following context to answer the question. 
     
     If you don't know the answer, say "I don't know."
     
