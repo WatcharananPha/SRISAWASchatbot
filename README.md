@@ -23,7 +23,7 @@
 
 * Retrieval-Augmented Generation (RAG) : ใช้ LangChain's RetrievalQA chain เพื่อ retrieval จาก vector database และ generation โดย LLM
 
-* Large Language Model (LLM) : ใช้ LLM (typhoon-v2-70b-instruct) จาก opentyphoon.ai ในการสร้างคำตอบ
+* Large Language Model (LLM) : ใช้ LLM [(typhoon-v2-70b-instruct)](https://docs.opentyphoon.ai/) จาก opentyphoon.ai ในการสร้างคำตอบ
 
 * Conversation Memory : ใช้ ConversationBufferMemory เพื่อให้ chatbot จดจำบริบทของการสนทนาก่อนหน้าได้
 
