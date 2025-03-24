@@ -99,9 +99,11 @@ def get_vector_database(uploaded_files=None):
 def create_chatbot(vector_db):
     retriever = vector_db.as_retriever(search_kwargs={'k': 5}) if vector_db else None
     template = """
-    You are an AI assistant specializing in providing information about SriSawad Company. Can add context to response
-    Use the following context to answer the question. 
-    
+    You are an AI assistant specializing in providing information about SriSawad Company. 
+    Can add context to response, Use the following context to answer the question. 
+    If the input is in any language, respond in that language. For example, if the user input is in Thai, 
+    respond in Thai. If the user input is in English, respond in English.
+
     If you don't know the answer, say "I don't know."
     
     Context: {context}
