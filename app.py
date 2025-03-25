@@ -96,36 +96,59 @@ def get_vector_database(uploaded_files=None):
         
     return None
 
-def create_chatbot(vector_db):
+def create_chatbot_with_references(vector_db):
     retriever = vector_db.as_retriever(search_kwargs={'k': 5}) if vector_db else None
     template = """
     You are an AI assistant specializing in providing information about SriSawad Company. 
-    Can add context to response, Use the following context to answer the question. 
-    If the input is in any language, respond in that language. For example, if the user input is in Thai, 
-    respond in Thai. If the user input is in English, respond in English.
-
+    Use the following context to answer the question.
+    Always cite your sources by adding the document name and line number at the end of each relevant piece of information.
+    If the input is in any language, respond in that language.
+    
     If you don't know the answer, say "I don't know."
     
     Context: {context}
     Question: {question}
     
-    Answer:
+    Answer (with references):
     """
     
     PROMPT = PromptTemplate(
         template=template, 
         input_variables=["context", "question"]
     )
+    
+    def process_response_with_references(response):
+        docs = response['source_documents']
+        references = []
+        
+        for doc in docs:
+            if hasattr(doc, 'metadata'):
+                doc_name = doc.metadata.get('source', 'Unknown document')
+                page_num = doc.metadata.get('page', 1)
+                line_num = doc.metadata.get('line', 1)                
+        answer = response['result']
+        if references:
+            answer += "\n\nReferences:" + "\n".join(references)
+            
+        return answer
 
-    return RetrievalQA.from_chain_type(
+    qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",
         retriever=retriever,
         memory=st.session_state.memory,
         chain_type_kwargs={
             "prompt": PROMPT
-        }
+        },
+        return_source_documents=True
     ) if retriever else None
+    
+    if qa_chain:
+        def wrapped_qa(query):
+            raw_response = qa_chain(query)
+            return {"result": process_response_with_references(raw_response)}
+        return wrapped_qa
+    return None
 
 def main():
     st.markdown(
@@ -160,9 +183,9 @@ def main():
             st.markdown(user_input)
 
         if vector_db:
-            chatbot = create_chatbot(vector_db)
+            chatbot = create_chatbot_with_references(vector_db)
             if chatbot:
-                response = chatbot({"query": user_input})["result"] 
+                response = chatbot({"query": user_input})["result"]
             else:
                 response = "I'm unable to retrieve relevant data, but I'll do my best!"
             st.session_state.memory.save_context(
