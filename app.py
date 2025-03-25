@@ -102,7 +102,7 @@ def create_chatbot_with_references(vector_db):
     You are an AI assistant specializing in providing information about SriSawad Company. 
     Use the following context to answer the question.
     Always cite your sources by adding the document name and line number at the end of each relevant piece of information.
-    If the input is in any language, respond in that language.
+    If the input is in any language, respond in that language. and name the document and line number.
     
     If you don't know the answer, say "I don't know."
     
