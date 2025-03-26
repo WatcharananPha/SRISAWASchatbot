@@ -39,7 +39,7 @@ def find_best_match(user_input):
     similarities = np.dot(stored_embeddings, input_embedding) / (np.linalg.norm(stored_embeddings, axis=1) * np.linalg.norm(input_embedding))
     best_index = np.argmax(similarities)
     best_similarity = similarities[best_index]
-    SIMILARITY_THRESHOLD = 0.65
+    SIMILARITY_THRESHOLD = 0.5
     
     if best_similarity >= SIMILARITY_THRESHOLD:
         best_match = stored_texts[best_index]
