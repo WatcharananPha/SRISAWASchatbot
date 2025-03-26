@@ -23,6 +23,7 @@ st.set_page_config(
     layout="centered"
 )
 
+#ตัวอย่างข้อมูลที่เก็บไว้ สามารถแทรก CSV ได้
 image_data = {
     "ขั้นตอน": "https://www.sawad.co.th/wp-content/uploads/2024/10/452800239_896789245826573_6595247655261158306_n-819x1024.jpg",
     "ขอเพิ่มวงเงินออนไลน์": "https://scontent.fbkk9-2.fna.fbcdn.net/v/t39.30808-6/486686347_1076360731202756_168808874607018632_n.jpg?_nc_cat=105&ccb=1-7&_nc_sid=127cfc&_nc_ohc=uJHbtZIQ3GYQ7kNvgHF4yWW&_nc_oc=AdlPyVfh41AJJVvHcdKikzqXRYeZcfKfAd7PBmC9TDVqDaLXMZ6ht6haqCQqphm58hn5mYtcDqqeXRGhjQYP5ORj&_nc_zt=23&_nc_ht=scontent.fbkk9-2.fna&_nc_gid=gJimbS1Yuc9gZTbg3EWpqA&oh=00_AYEUgeZgzkddThejgHiv-SW7TA0cvTKph9ngdIqKAc1cWA&oe=67E8B68B",
