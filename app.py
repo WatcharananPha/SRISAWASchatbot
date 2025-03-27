@@ -46,7 +46,7 @@ llm = ChatOpenAI(
     openai_api_key="sk-GqA4Uj6iZXaykbOzIlFGtmdJr6VqiX94NhhjPZaf81kylRzh",
     openai_api_base="https://api.opentyphoon.ai/v1",
     model_name="typhoon-v2-70b-instruct",
-    temperature=1.0,
+    temperature=1.25,
     max_tokens=8192,
 )
 
@@ -215,17 +215,19 @@ def main():
         """,
         unsafe_allow_html=True
     )
-    uploaded_files = st.file_uploader(
-        "Upload documents (PDF, TXT, etc.)",
-        accept_multiple_files=True,
-        key="file_uploader",
-        help="Upload documents to build or update the knowledge base."
+
+    with st.expander("Extension Feature (Optional)", expanded=False):
+        uploaded_files = st.file_uploader(
+            "Upload documents (PDF, TXT, etc.)",
+            accept_multiple_files=True,
+            key="file_uploader",
+            label_visibility="collapsed"
         )
+        
+        if uploaded_files is not None and ("uploaded_files_obj" not in st.session_state or st.session_state.uploaded_files_obj != uploaded_files):
+            st.session_state.uploaded_files_obj = uploaded_files
 
-    if uploaded_files is not None and ("uploaded_files_obj" not in st.session_state or st.session_state.uploaded_files_obj != uploaded_files):
-         st.session_state.uploaded_files_obj = uploaded_files
-
-    uploaded_files_info = tuple((f.name, f.size, f.type) for f in uploaded_files) if uploaded_files else None
+    uploaded_files_info = tuple((f.name, f.size, f.type) for f in st.session_state.get("uploaded_files_obj", [])) if st.session_state.get("uploaded_files_obj") else None
     vector_db = get_vector_database(lc_embed_model, uploaded_files_info)
     qa_chain = None
     if vector_db:
@@ -233,12 +235,12 @@ def main():
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
+
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    user_input = st.chat_input("Ask me anything about the uploaded documents...")
-
+    user_input = st.chat_input("Ask me anything About SRISAWAD...")
     if user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
@@ -246,41 +248,34 @@ def main():
 
         response_text = "Chatbot is not ready. Please upload documents and ensure they are processed."
         if qa_chain:
-            with st.spinner("Thinking..."):
-                try:
-                    raw_response = qa_chain({"query": user_input})
-                    response_text = format_response(raw_response, user_input)
-                except Exception as e:
-                    st.error(f"Error during response generation: {e}")
-                    response_text = "Sorry, an error occurred."
+            try:
+                raw_response = qa_chain({"query": user_input})
+                response_text = format_response(raw_response, user_input)
+            except Exception as e:
+                response_text = "Sorry, an error occurred."
         elif vector_db:
-             response_text = "Error: Knowledge base loaded, but chatbot failed to initialize."
-
+             response_text = "Error: KB loaded, but chatbot components failed."
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             full_response_content = ""
             if response_text.startswith("![Relevant Image]"):
                 parts = response_text.split("\n\n", 1)
-                if len(parts) == 2:
-                    image_part, text_part = parts
-                    message_placeholder.markdown(image_part)
-                    text_placeholder = st.empty()
-                    for i in range(len(text_part)):
-                        text_placeholder.markdown(text_part[:i+1])
-                        time.sleep(0.02)
-                    full_response_content = response_text
-                else:
-                    full_response_content = response_text
-                    for i in range(len(response_text)):
-                        message_placeholder.markdown(response_text[:i+1])
-                        time.sleep(0.02)
-            else:
+                image_part, text_part = parts if len(parts) == 2 else (None, response_text)
+                if image_part: message_placeholder.markdown(image_part)
+                text_placeholder = st.empty() if image_part else message_placeholder
+                current_text = text_part if image_part else response_text
+                for i in range(len(current_text)):
+                    text_placeholder.markdown(current_text[:i+1])
+                    time.sleep(0.01)
+                full_response_content = response_text
+            else:   
                 full_response_content = response_text
                 for i in range(len(response_text)):
                     message_placeholder.markdown(response_text[:i+1])
                     time.sleep(0.02)
 
         st.session_state.messages.append({"role": "assistant", "content": full_response_content})
+
 
 if __name__ == "__main__":
     main()
