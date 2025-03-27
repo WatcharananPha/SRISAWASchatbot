@@ -223,7 +223,7 @@ def main():
             key="file_uploader",
             label_visibility="collapsed"
         )
-        
+
         if uploaded_files is not None and ("uploaded_files_obj" not in st.session_state or st.session_state.uploaded_files_obj != uploaded_files):
             st.session_state.uploaded_files_obj = uploaded_files
 
