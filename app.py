@@ -46,7 +46,7 @@ llm = ChatOpenAI(
     openai_api_key="sk-GqA4Uj6iZXaykbOzIlFGtmdJr6VqiX94NhhjPZaf81kylRzh",
     openai_api_base="https://api.opentyphoon.ai/v1",
     model_name="typhoon-v2-70b-instruct",
-    temperature=1.0,
+    temperature=1.25,
     max_tokens=8192,
 )
 
