@@ -26,7 +26,7 @@ FAISS_FOLDER = "faiss_index"
 TEMP_UPLOAD_DIR = "temp_streamlit_uploads"
 os.makedirs(FAISS_FOLDER, exist_ok=True)
 
-@st.cache_resource
+@st.cache_resource  
 def load_embedding_models():
     st_model = SentenceTransformer("BAAI/bge-m3")
     lc_embed_model = HuggingFaceEmbeddings(model_name="BAAI/bge-m3")
@@ -223,7 +223,7 @@ def main():
             key="file_uploader",
             label_visibility="collapsed"
         )
-        
+
         if uploaded_files is not None and ("uploaded_files_obj" not in st.session_state or st.session_state.uploaded_files_obj != uploaded_files):
             st.session_state.uploaded_files_obj = uploaded_files
 
