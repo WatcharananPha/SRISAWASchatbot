@@ -325,7 +325,7 @@ def manage_chat_history():
                     ].iloc[0]['Content']
                     
                     if st.button(
-                        f"💭 {get_chat_preview(first_message)}",
+                        f"{get_chat_preview(first_message)}",
                         key=f"chat_button_{chat_id}",
                         use_container_width=True
                     ):
