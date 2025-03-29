@@ -2,6 +2,8 @@ import streamlit as st
 import os
 import nest_asyncio
 import time
+import pandas as pd
+from datetime import datetime
 from llama_parse import LlamaParse
 from langchain.vectorstores import FAISS
 from langchain_openai import ChatOpenAI
@@ -13,6 +15,7 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.memory import ConversationBufferMemory
 from sentence_transformers import SentenceTransformer
 import numpy as np
+import json
 
 nest_asyncio.apply()
 
@@ -205,17 +208,136 @@ def format_response(response_dict, query):
     else:
         return answer
 
+def load_chat_history():
+    try:
+        with open("chat_history.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"chats": {}}
+
+def save_chat_history(history):
+    with open("chat_history.json", "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2, default=str)
+
+def save_chat_to_history(chat_id, role, content):
+    history = load_chat_history()
+    if chat_id not in history["chats"]:
+        history["chats"][chat_id] = {
+            "messages": [],
+            "created_at": str(pd.Timestamp.now())
+        }
+    
+    history["chats"][chat_id]["messages"].append({
+        "role": role,
+        "content": content,
+        "timestamp": str(pd.Timestamp.now())
+    })
+    
+    save_chat_history(history)
+    
+def get_chat_preview(content, max_length=30):
+    words = content.split()
+    preview = ' '.join(words[:5])
+    return f"{preview[:max_length]}..." if len(preview) > max_length else preview
+
+def manage_chat_history():
+    with st.sidebar:
+        st.markdown(
+            """
+            <style>
+                [data-testid="stSidebar"] {
+                    min-width: 400px !important;
+                    max-width: 400px !important;
+                    width: 400px !important;
+                    transition: width 0.3s;
+                }
+                [data-testid="stSidebarNav"] {
+                    display: none;
+                }
+                section[data-testid="stSidebarContent"] {
+                    width: 450px !important;
+                    padding-right: 1rem;
+                }
+                button[data-testid="baseButton-secondary"] {
+                    visibility: hidden;
+                }
+                .stButton button {
+                    height: 50px;
+                    font-size: 16px;
+                }
+                [data-testid="stMarkdownContainer"] h1 {
+                    font-size: 24px;
+                    padding: 10px 0;
+                    text-align: center;
+                }
+                .stSubheader {
+                    font-size: 18px;
+                    padding: 5px 0;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown('<h1 style="text-align: center;">Chat History</h1>', unsafe_allow_html=True)
+        if st.button("🗪 New Chat", type="primary", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.current_chat_id = f"chat_{int(time.time())}"
+            st.rerun()
+        
+        st.divider()
+        history = load_chat_history()
+        
+        if history["chats"]:
+            chat_data = []
+            for chat_id, chat_info in history["chats"].items():
+                for msg in chat_info["messages"]:
+                    chat_data.append({
+                        "ChatID": chat_id,
+                        "Role": msg["role"],
+                        "Content": msg["content"],
+                        "Timestamp": pd.to_datetime(msg["timestamp"])
+                    })
+            
+            st.session_state.chat_history_df = pd.DataFrame(chat_data)
+            st.session_state.chat_history_df['Date'] = st.session_state.chat_history_df['Timestamp'].dt.date
+            dates = sorted(st.session_state.chat_history_df['Date'].unique(), reverse=True)
+            
+            for date in dates:
+                st.subheader(date.strftime('%Y-%m-%d'))
+                day_chats = st.session_state.chat_history_df[
+                    st.session_state.chat_history_df['Date'] == date
+                ]
+                
+                for chat_id in day_chats['ChatID'].unique():
+                    chat_messages = day_chats[day_chats['ChatID'] == chat_id]
+                    first_message = chat_messages[
+                        chat_messages['Role'] == 'user'
+                    ].iloc[0]['Content']
+                    
+                    if st.button(
+                        f"💭 {get_chat_preview(first_message)}",
+                        key=f"chat_button_{chat_id}",
+                        use_container_width=True
+                    ):
+                        st.session_state.messages = [
+                            {"role": msg["role"].lower(), "content": msg["content"]}
+                            for msg in history["chats"][chat_id]["messages"]
+                        ]
+                        st.session_state.current_chat_id = chat_id
+                        st.rerun()
+
 def main():
     st.markdown(
-         """
+        """
         <div style="text-align: center;">
             <img src="https://cdn-cncpm.nitrocdn.com/DpTaQVKLCVHUePohOhFgtgFLWoUOmaMZ/assets/images/optimized/rev-99fcfef/www.sawad.co.th/wp-content/uploads/2020/12/logo.png.webp" width="300">
-            <h1>Srisawad Chatbot Demo</h1>
+            <h1 style="font-size: 42px; font-weight: bold; margin-top: 20px;">Srisawad Chatbot Demo</h1>
         </div>
         """,
         unsafe_allow_html=True
     )
-
+    manage_chat_history()
     with st.expander("Extension Feature (Optional)", expanded=False):
         uploaded_files = st.file_uploader(
             "Upload documents (PDF, TXT, etc.)",
@@ -227,6 +349,8 @@ def main():
         if uploaded_files is not None and ("uploaded_files_obj" not in st.session_state or st.session_state.uploaded_files_obj != uploaded_files):
             st.session_state.uploaded_files_obj = uploaded_files
 
+    if "current_chat_id" not in st.session_state:
+        st.session_state.current_chat_id = f"chat_{int(time.time())}"
     uploaded_files_info = tuple((f.name, f.size, f.type) for f in st.session_state.get("uploaded_files_obj", [])) if st.session_state.get("uploaded_files_obj") else None
     vector_db = get_vector_database(lc_embed_model, uploaded_files_info)
     qa_chain = None
@@ -242,6 +366,7 @@ def main():
 
     user_input = st.chat_input("Ask me anything About SRISAWAD...")
     if user_input:
+        save_chat_to_history(st.session_state.current_chat_id, "user", user_input)
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
@@ -255,6 +380,7 @@ def main():
                 response_text = "Sorry, an error occurred."
         elif vector_db:
              response_text = "Error: KB loaded, but chatbot components failed."
+
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             full_response_content = ""
@@ -274,8 +400,8 @@ def main():
                     message_placeholder.markdown(response_text[:i+1])
                     time.sleep(0.02)
 
+        save_chat_to_history(st.session_state.current_chat_id, "assistant", full_response_content)
         st.session_state.messages.append({"role": "assistant", "content": full_response_content})
-
 
 if __name__ == "__main__":
     main()
