@@ -279,11 +279,20 @@ def manage_chat_history():
             unsafe_allow_html=True
         )
 
-        st.markdown('<h1 style="text-align: center;">Chat History</h1>', unsafe_allow_html=True)
-        if st.button("🗪 New Chat", type="primary", use_container_width=True):
-            st.session_state.messages = []
-            st.session_state.current_chat_id = f"chat_{int(time.time())}"
-            st.rerun()
+        st.markdown('<h1 style="text-align: center; font-size: 32px;">Chat History</h1>', unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🗪 New Chat", type="primary", use_container_width=True):
+                st.session_state.messages = []
+                st.session_state.current_chat_id = f"chat_{int(time.time())}"
+                st.rerun()
+        with col2:
+            if st.button("🗑️ Delete All", type="secondary", use_container_width=True):
+                if delete_chat_history():
+                    st.session_state.messages = []
+                    st.session_state.current_chat_id = f"chat_{int(time.time())}"
+                    st.rerun()
         
         st.divider()
         history = load_chat_history()
@@ -327,12 +336,20 @@ def manage_chat_history():
                         st.session_state.current_chat_id = chat_id
                         st.rerun()
 
+def delete_chat_history():
+    try:
+        with open("chat_history.json", "w", encoding="utf-8") as f:
+            json.dump({"chats": {}}, f)
+        return True
+    except Exception:
+        return False
+
 def main():
     st.markdown(
         """
         <div style="text-align: center;">
             <img src="https://cdn-cncpm.nitrocdn.com/DpTaQVKLCVHUePohOhFgtgFLWoUOmaMZ/assets/images/optimized/rev-99fcfef/www.sawad.co.th/wp-content/uploads/2020/12/logo.png.webp" width="300">
-            <h1 style="font-size: 42px; font-weight: bold; margin-top: 20px;">Srisawad Chatbot Demo</h1>
+            <h1 style="font-size: 40px; font-weight: bold; margin-top: 20px;">Srisawad Chatbot Demo</h1>
         </div>
         """,
         unsafe_allow_html=True
@@ -396,7 +413,7 @@ def main():
                 full_response_content = response_text
             else:   
                 full_response_content = response_text
-                for i in range(len(response_text)):
+                for  i in range(len(response_text)):
                     message_placeholder.markdown(response_text[:i+1])
                     time.sleep(0.02)
 
