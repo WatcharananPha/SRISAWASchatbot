@@ -421,4 +421,8 @@ def main():
         st.session_state.messages.append({"role": "assistant", "content": full_response_content})
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     main()  
+=======
+    main()
+>>>>>>> b3a2cedccf7c10a9073ac7a01ec56e12f6e36319
