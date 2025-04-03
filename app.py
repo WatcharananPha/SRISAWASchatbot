@@ -3,7 +3,6 @@ import os
 import nest_asyncio
 import time
 import pandas as pd
-from datetime import datetime
 
 import PyPDF2
 import io
@@ -140,8 +139,8 @@ def get_vector_database(_lc_embed_model, uploaded_files_info):
                 text_content = process_uploaded_files(uploaded_files)
                 if text_content:
                     text_splitter = RecursiveCharacterTextSplitter(
-                        chunk_size=256,
-                        chunk_overlap=128,
+                        chunk_size=512,
+                        chunk_overlap=256,
                         length_function=len,
                         is_separator_regex=False,
                     )
@@ -172,7 +171,7 @@ def get_vector_database(_lc_embed_model, uploaded_files_info):
                 return main_store
 
         return combined_store
-
+    
     return main_store
 
 @st.cache_resource(ttl=3600)
