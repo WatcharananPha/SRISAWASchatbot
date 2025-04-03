@@ -140,8 +140,8 @@ def get_vector_database(_lc_embed_model, uploaded_files_info):
                 text_content = process_uploaded_files(uploaded_files)
                 if text_content:
                     text_splitter = RecursiveCharacterTextSplitter(
-                        chunk_size=256,
-                        chunk_overlap=128,
+                        chunk_size=128,
+                        chunk_overlap=64,
                         length_function=len,
                         is_separator_regex=False,
                     )
