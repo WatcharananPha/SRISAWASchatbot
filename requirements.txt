@@ -7,3 +7,4 @@ huggingface-hub
 langchain-community
 sentence-transformers
 faiss-cpu
+PyPDF2
