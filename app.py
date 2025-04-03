@@ -4,7 +4,9 @@ import nest_asyncio
 import time
 import pandas as pd
 from datetime import datetime
-from llama_parse import LlamaParse
+
+import PyPDF2
+import io
 from langchain.vectorstores import FAISS
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
@@ -25,9 +27,13 @@ st.set_page_config(
     layout="centered"
 )
 
-FAISS_FOLDER = "faiss_index"
+MAIN_FAISS_FOLDER = "faiss_index"
+UPLOADED_FAISS_FOLDER = "uploaded_faiss_index"
 TEMP_UPLOAD_DIR = "temp_streamlit_uploads"
-os.makedirs(FAISS_FOLDER, exist_ok=True)
+
+os.makedirs(MAIN_FAISS_FOLDER, exist_ok=True)
+os.makedirs(UPLOADED_FAISS_FOLDER, exist_ok=True)
+os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
 
 @st.cache_resource  
 def load_embedding_models():
@@ -53,13 +59,6 @@ llm = ChatOpenAI(
     max_tokens=8192,
 )
 
-parser = LlamaParse(
-    api_key="llx-3QORP75OUx11inHUpIy67FLzIgYc0gjfAGKRLDiECXOXkkne",
-    result_type="markdown",
-    num_workers=1,
-    verbose=True,
-    language="en",
-)
 
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(
@@ -81,85 +80,100 @@ def find_best_match(user_input, _st_model, _stored_texts, _stored_embeddings, th
         return image_data.get(best_match, None)
     return None
 
-def process_uploaded_files(uploaded_files, _parser):
+def process_uploaded_files(uploaded_files):
     all_text = ""
     temp_dir = TEMP_UPLOAD_DIR
     os.makedirs(temp_dir, exist_ok=True)
-    temp_files_paths = []
+    
     for uploaded_file in uploaded_files:
-        file_path = os.path.join(temp_dir, f"temp_{uploaded_file.name}")
-        temp_files_paths.append(file_path)
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getvalue())
+        try:
+            if uploaded_file.name.lower().endswith('.pdf'):
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.getvalue()))
+                for page in pdf_reader.pages:
+                    all_text += page.extract_text() + "\n\n"
+            
+            elif uploaded_file.name.lower().endswith('.txt'):
+                text_content = uploaded_file.getvalue().decode('utf-8')
+                all_text += text_content + "\n\n"
+            
+            st.write(f"Processed file: {uploaded_file.name}")
+            
+        except Exception as e:
+            st.error(f"Error processing {uploaded_file.name}: {str(e)}")
             continue
-
-        st.write(f"Processing file: {uploaded_file.name}...")
-        if file_path.lower().endswith('.txt'):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                all_text += f.read() + "\n\n"
-        else:
-            documents = _parser.load_data(file_path)
-            for doc in documents:
-                all_text += doc.text + "\n\n"
-        for temp_path in temp_files_paths:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-        if os.path.exists(temp_dir) and not os.listdir(temp_dir):
-            os.rmdir(temp_dir)
+    
     return all_text.strip()
 
 @st.cache_resource(ttl=3600)
 def get_vector_database(_lc_embed_model, uploaded_files_info):
-    faiss_index_path = os.path.join(FAISS_FOLDER, "index.faiss")
-    faiss_pkl_path = os.path.join(FAISS_FOLDER, "index.pkl")
-    os.makedirs(FAISS_FOLDER, exist_ok=True)
-    vector_store = None
-    if os.path.exists(faiss_index_path) and os.path.exists(faiss_pkl_path) and not uploaded_files_info:
-        try:
-            vector_store = FAISS.load_local(
-                FAISS_FOLDER,
-                _lc_embed_model,
-                allow_dangerous_deserialization=True
-            )
-        except Exception:
-            try:
-                if os.path.exists(faiss_index_path): os.remove(faiss_index_path)
-                if os.path.exists(faiss_pkl_path): os.remove(faiss_pkl_path)
-            except Exception:
-                pass
-            vector_store = None
-
-    if uploaded_files_info:
-        uploaded_files = st.session_state.get("uploaded_files_obj", None)
-        if not uploaded_files:
-             return None 
-        text_content = process_uploaded_files(uploaded_files, parser)
-        if not text_content:
-            return None
-
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1024,
-            chunk_overlap=256,
-            length_function=len,
-            is_separator_regex=False,
+    main_store = None
+    uploaded_store = None
+    main_index_path = os.path.join(MAIN_FAISS_FOLDER, "index.faiss") 
+    main_pkl_path = os.path.join(MAIN_FAISS_FOLDER, "index.pkl")
+    if not (os.path.exists(main_index_path) and os.path.exists(main_pkl_path)):
+        return None
+        
+    try:
+        main_store = FAISS.load_local(
+            MAIN_FAISS_FOLDER,
+            _lc_embed_model,
+            allow_dangerous_deserialization=True
         )
-        chunks = text_splitter.split_text(text_content)
-        if not chunks:
-            return None
-
-        documents = [Document(page_content=chunk) for chunk in chunks]
+    except Exception as e:
+        st.error(f"Could not load main index: {str(e)}")
+        return None
+    
+    if main_store:
         try:
-            vector_store = FAISS.from_documents(
-                documents=documents,
+            combined_store = FAISS.from_documents(
+                [Document(page_content="init")],
                 embedding=_lc_embed_model
             )
+            combined_store.merge_from(main_store)
+        except Exception as e:
+            st.error(f"Error initializing combined store: {str(e)}")
+            return main_store 
+        
+        if uploaded_files_info:
+            uploaded_files = st.session_state.get("uploaded_files_obj", None)
+            if uploaded_files:
+                text_content = process_uploaded_files(uploaded_files)
+                if text_content:
+                    text_splitter = RecursiveCharacterTextSplitter(
+                        chunk_size=256,
+                        chunk_overlap=128,
+                        length_function=len,
+                        is_separator_regex=False,
+                    )
+                    chunks = text_splitter.split_text(text_content)
+                    if chunks:
+                        documents = [Document(page_content=chunk) for chunk in chunks]
+                        try:
+                            uploaded_store = FAISS.from_documents(
+                                documents=documents,
+                                embedding=_lc_embed_model
+                            )
+                            uploaded_store.save_local(UPLOADED_FAISS_FOLDER)
+                            combined_store.merge_from(uploaded_store)
+                                
+                        except Exception as e:
+                            st.error(f"Error creating vector store: {str(e)}")
+                            return main_store
+        elif os.path.exists(os.path.join(UPLOADED_FAISS_FOLDER, "index.faiss")):
             try:
-                vector_store.save_local(FAISS_FOLDER)
-            except Exception:
-                pass
-        except Exception:
-            vector_store = None
-    return vector_store
+                uploaded_store = FAISS.load_local(
+                    UPLOADED_FAISS_FOLDER,
+                    _lc_embed_model,
+                    allow_dangerous_deserialization=True
+                )
+                combined_store.merge_from(uploaded_store)
+            except Exception as e:
+                st.warning(f"Could not load uploaded index: {str(e)}")
+                return main_store
+
+        return combined_store
+
+    return main_store
 
 @st.cache_resource(ttl=3600)
 def get_qa_chain(_vector_db, _llm, _memory):
@@ -167,9 +181,7 @@ def get_qa_chain(_vector_db, _llm, _memory):
         You are an AI assistant specializing in providing information about SriSawad Company.
         Use the following context retrieved from uploaded documents to answer the question accurately.
         If the input is in Thai, respond in Thai. If the input is in English, respond in English.
-
-        If you don't know the answer based *only* on the provided context, clearly state that the information is not available in the documents \
-        (e.g., "ฉันไม่พบข้อมูลเกี่ยวกับเรื่องนี้ในเอกสารที่ให้มา" or "I don't have information about that in the provided documents."). Do not make up information or use external knowledge.
+        Do not make up information or use external knowledge.
 
         Context:
         {context}
