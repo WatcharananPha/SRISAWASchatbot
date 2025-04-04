@@ -155,38 +155,26 @@ def get_combined_retriever(main_db, session_db=None):
             search_type="similarity",
             search_kwargs={'k': 5}
         )
-        
     main_retriever = main_db.as_retriever(
         search_type="similarity",
-        search_kwargs={'k': 3}
+        search_kwargs={'k': 5} 
     )
     
     session_retriever = session_db.as_retriever(
         search_type="similarity", 
-        search_kwargs={'k': 2}
+        search_kwargs={'k': 5}
     )
-
-    class CombinedRetriever(BaseRetriever, return_source_docs=True):
+    
+    class CombinedRetriever(BaseRetriever):
         def get_relevant_documents(self, query: str) -> List[Document]:
             session_docs = session_retriever.get_relevant_documents(query)
             main_docs = main_retriever.get_relevant_documents(query)
-            seen_content = set()
-            combined_docs = []
-            
-            for doc in session_docs + main_docs:
-                if doc.page_content not in seen_content:
-                    seen_content.add(doc.page_content)
-                    combined_docs.append(doc)
-                    
+            combined_docs = session_docs + main_docs
             return combined_docs
             
         async def aget_relevant_documents(self, query: str) -> List[Document]:
-            """Async version of get_relevant_documents"""
-            return await asyncio.gather(
-                session_retriever.aget_relevant_documents(query),
-                main_retriever.aget_relevant_documents(query)
-            )
-
+            raise NotImplementedError("Async retrieval not implemented")
+            
     return CombinedRetriever()
 
 def get_qa_chain(retriever, _llm, _memory):
