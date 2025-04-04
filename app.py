@@ -6,6 +6,9 @@ import pandas as pd
 
 import PyPDF2
 import io
+from langchain.schema import BaseRetriever
+from typing import List
+from langchain.schema import Document
 from langchain.vectorstores import FAISS
 from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
@@ -27,11 +30,9 @@ st.set_page_config(
 )
 
 MAIN_FAISS_FOLDER = "faiss_index"
-UPLOADED_FAISS_FOLDER = "uploaded_faiss_index"
 TEMP_UPLOAD_DIR = "temp_streamlit_uploads"
 
 os.makedirs(MAIN_FAISS_FOLDER, exist_ok=True)
-os.makedirs(UPLOADED_FAISS_FOLDER, exist_ok=True)
 os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
 
 @st.cache_resource  
@@ -58,7 +59,6 @@ llm = ChatOpenAI(
     max_tokens=4096,
 )
 
-
 if "memory" not in st.session_state:
     st.session_state.memory = ConversationBufferMemory(
         return_messages=True,
@@ -67,6 +67,9 @@ if "memory" not in st.session_state:
         output_key="result",
         k=3
     )
+
+if "session_vector_store" not in st.session_state:
+    st.session_state.session_vector_store = None
 
 def find_best_match(user_input, _st_model, _stored_texts, _stored_embeddings, threshold=0.6):
     input_embedding = _st_model.encode([user_input])[0]
@@ -103,82 +106,81 @@ def process_uploaded_files(uploaded_files):
     
     return all_text.strip()
 
-@st.cache_resource(ttl=3600)
-def get_vector_database(_lc_embed_model, uploaded_files_info):
-    main_store = None
-    uploaded_store = None
-    main_index_path = os.path.join(MAIN_FAISS_FOLDER, "index.faiss") 
-    main_pkl_path = os.path.join(MAIN_FAISS_FOLDER, "index.pkl")
-    if not (os.path.exists(main_index_path) and os.path.exists(main_pkl_path)):
+def create_session_vector_store(text_content, _lc_embed_model):
+    if not text_content:
         return None
         
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=128,
+        chunk_overlap=64,
+        length_function=len,
+        is_separator_regex=False,
+    )
+    chunks = text_splitter.split_text(text_content)
+    if not chunks:
+        return None
+        
+    documents = [Document(page_content=chunk) for chunk in chunks]
+    try:
+        session_store = FAISS.from_documents(
+            documents=documents,
+            embedding=_lc_embed_model
+        )
+        return session_store
+    except Exception as e:
+        st.error(f"Error creating session vector store: {str(e)}")
+        return None
+
+def get_main_vector_database(_lc_embed_model):
+    main_index_path = os.path.join(MAIN_FAISS_FOLDER, "index.faiss") 
+    main_pkl_path = os.path.join(MAIN_FAISS_FOLDER, "index.pkl")
+    
+    if not (os.path.exists(main_index_path) and os.path.exists(main_pkl_path)):
+        return None
+    
     try:
         main_store = FAISS.load_local(
             MAIN_FAISS_FOLDER,
             _lc_embed_model,
             allow_dangerous_deserialization=True
         )
+        return main_store
     except Exception as e:
         st.error(f"Could not load main index: {str(e)}")
         return None
-    
-    if main_store:
-        try:
-            combined_store = FAISS.from_documents(
-                [Document(page_content="init")],
-                embedding=_lc_embed_model
-            )
-            combined_store.merge_from(main_store)
-        except Exception as e:
-            st.error(f"Error initializing combined store: {str(e)}")
-            return main_store 
-        
-        if uploaded_files_info:
-            uploaded_files = st.session_state.get("uploaded_files_obj", None)
-            if uploaded_files:
-                text_content = process_uploaded_files(uploaded_files)
-                if text_content:
-                    text_splitter = RecursiveCharacterTextSplitter(
-                        chunk_size=512,
-                        chunk_overlap=256,
-                        length_function=len,
-                        is_separator_regex=False,
-                    )
-                    chunks = text_splitter.split_text(text_content)
-                    if chunks:
-                        documents = [Document(page_content=chunk) for chunk in chunks]
-                        try:
-                            uploaded_store = FAISS.from_documents(
-                                documents=documents,
-                                embedding=_lc_embed_model
-                            )
-                            uploaded_store.save_local(UPLOADED_FAISS_FOLDER)
-                            combined_store.merge_from(uploaded_store)
-                                
-                        except Exception as e:
-                            st.error(f"Error creating vector store: {str(e)}")
-                            return main_store
-        elif os.path.exists(os.path.join(UPLOADED_FAISS_FOLDER, "index.faiss")):
-            try:
-                uploaded_store = FAISS.load_local(
-                    UPLOADED_FAISS_FOLDER,
-                    _lc_embed_model,
-                    allow_dangerous_deserialization=True
-                )
-                combined_store.merge_from(uploaded_store)
-            except Exception as e:
-                st.warning(f"Could not load uploaded index: {str(e)}")
-                return main_store
 
-        return combined_store
+def get_combined_retriever(main_db, session_db=None):
+    if session_db is None:
+        return main_db.as_retriever(
+            search_type="similarity",
+            search_kwargs={'k': 5}
+        )
+    main_retriever = main_db.as_retriever(
+        search_type="similarity",
+        search_kwargs={'k': 5} 
+    )
     
-    return main_store
+    session_retriever = session_db.as_retriever(
+        search_type="similarity", 
+        search_kwargs={'k': 5}
+    )
+    
+    class CombinedRetriever(BaseRetriever):
+        def get_relevant_documents(self, query: str) -> List[Document]:
+            session_docs = session_retriever.get_relevant_documents(query)
+            main_docs = main_retriever.get_relevant_documents(query)
+            combined_docs = session_docs + main_docs
+            return combined_docs
+            
+        async def aget_relevant_documents(self, query: str) -> List[Document]:
+            raise NotImplementedError("Async retrieval not implemented")
+            
+    return CombinedRetriever()
 
-@st.cache_resource(ttl=3600)
-def get_qa_chain(_vector_db, _llm, _memory):
+def get_qa_chain(retriever, _llm, _memory):
     template = """
         You are an AI assistant specializing in providing information about SriSawad Company.
-        Use the following context retrieved from uploaded documents to answer the question accurately.
+        Use the following context retrieved from documents to answer the question accurately.
         If the input is in Thai, respond in Thai. If the input is in English, respond in English.
         Do not make up information or use external knowledge.
 
@@ -193,11 +195,6 @@ def get_qa_chain(_vector_db, _llm, _memory):
         template=template,
         input_variables=["context", "question"]
     )
-
-    retriever = _vector_db.as_retriever(
-            search_type="similarity",
-            search_kwargs={'k': 3}
-        )
 
     qa_chain = RetrievalQA.from_chain_type(
             llm=_llm,
@@ -297,12 +294,14 @@ def manage_chat_history():
             if st.button("🗪 New Chat", type="primary", use_container_width=True):
                 st.session_state.messages = []
                 st.session_state.current_chat_id = f"chat_{int(time.time())}"
+                st.session_state.session_vector_store = None
                 st.rerun()
         with col2:
             if st.button("🗑️ Delete All", type="secondary", use_container_width=True):
                 if delete_chat_history():
                     st.session_state.messages = []
                     st.session_state.current_chat_id = f"chat_{int(time.time())}"
+                    st.session_state.session_vector_store = None
                     st.rerun()
         
         st.divider()
@@ -345,6 +344,7 @@ def manage_chat_history():
                             for msg in history["chats"][chat_id]["messages"]
                         ]
                         st.session_state.current_chat_id = chat_id
+                        st.session_state.session_vector_store = None
                         st.rerun()
 
 def delete_chat_history():
@@ -366,6 +366,7 @@ def main():
         unsafe_allow_html=True
     )
     manage_chat_history()
+    
     with st.expander("Extension Feature (Optional)", expanded=False):
         uploaded_files = st.file_uploader(
             "Upload documents (PDF, TXT, etc.)",
@@ -374,16 +375,28 @@ def main():
             label_visibility="collapsed"
         )
 
-        if uploaded_files is not None and ("uploaded_files_obj" not in st.session_state or st.session_state.uploaded_files_obj != uploaded_files):
-            st.session_state.uploaded_files_obj = uploaded_files
+        if uploaded_files:
+            if "uploaded_files_obj" not in st.session_state or st.session_state.uploaded_files_obj != uploaded_files:
+                st.session_state.uploaded_files_obj = uploaded_files
+                text_content = process_uploaded_files(uploaded_files)
+                if text_content:
+                    with st.spinner("Creating vector embeddings for uploaded documents..."):
+                        session_store = create_session_vector_store(text_content, lc_embed_model)
+                        if session_store:
+                            st.success("Documents processed and ready for queries!")
+                            st.session_state.session_vector_store = session_store
+                        else:
+                            st.error("Failed to create vector embeddings for uploaded documents.")
 
     if "current_chat_id" not in st.session_state:
         st.session_state.current_chat_id = f"chat_{int(time.time())}"
-    uploaded_files_info = tuple((f.name, f.size, f.type) for f in st.session_state.get("uploaded_files_obj", [])) if st.session_state.get("uploaded_files_obj") else None
-    vector_db = get_vector_database(lc_embed_model, uploaded_files_info)
+
+    main_vector_db = get_main_vector_database(lc_embed_model)
     qa_chain = None
-    if vector_db:
-        qa_chain = get_qa_chain(vector_db, llm, st.session_state.memory)
+    if main_vector_db:
+        session_vector_db = st.session_state.session_vector_store
+        combined_retriever = get_combined_retriever(main_vector_db, session_vector_db)
+        qa_chain = get_qa_chain(combined_retriever, llm, st.session_state.memory)
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -398,38 +411,46 @@ def main():
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
-
-        response_text = "Chatbot is not ready. Please upload documents and ensure they are processed."
-        if qa_chain:
+        response_text = "I apologize, but I'm not able to process your request at the moment. "
+        
+        if not main_vector_db:
+            response_text += "The main knowledge base is not loaded properly."
+        elif not qa_chain:
+            response_text += "The question-answering system is not initialized correctly."
+        else:
             try:
                 raw_response = qa_chain({"query": user_input})
-                response_text = format_response(raw_response, user_input)
+                if raw_response and "result" in raw_response:
+                    response_text = format_response(raw_response, user_input)
+                else:
+                    response_text = "I couldn't generate a proper response for your query. Please try rephrasing your question."
             except Exception as e:
-                response_text = "Sorry, an error occurred."
-        elif vector_db:
-             response_text = "Error: KB loaded, but chatbot components failed."
+                response_text = f"An error occurred while processing your request: {str(e)}"
 
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             full_response_content = ""
+
             if response_text.startswith("![Relevant Image]"):
                 parts = response_text.split("\n\n", 1)
-                image_part, text_part = parts if len(parts) == 2 else (None, response_text)
-                if image_part: message_placeholder.markdown(image_part)
-                text_placeholder = st.empty() if image_part else message_placeholder
-                current_text = text_part if image_part else response_text
-                for i in range(len(current_text)):
-                    text_placeholder.markdown(current_text[:i+1])
-                    time.sleep(0.01)
+                if len(parts) == 2:
+                    image_part, text_part = parts
+                    message_placeholder.markdown(image_part)
+                    text_placeholder = st.empty()
+                    for i in range(len(text_part)):
+                        text_placeholder.markdown(text_part[:i+1])
+                        time.sleep(0.01)
+                else:
+                    message_placeholder.markdown(response_text)
                 full_response_content = response_text
-            else:   
-                full_response_content = response_text
-                for  i in range(len(response_text)):
+            else:
+                for i in range(len(response_text)):
                     message_placeholder.markdown(response_text[:i+1])
                     time.sleep(0.02)
+                full_response_content = response_text
 
         save_chat_to_history(st.session_state.current_chat_id, "assistant", full_response_content)
         st.session_state.messages.append({"role": "assistant", "content": full_response_content})
 
 if __name__ == "__main__":
-    main()  
+    main()
