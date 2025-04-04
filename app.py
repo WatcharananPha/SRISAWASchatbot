@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import nest_asyncio
+import asyncio
 import time
 import pandas as pd
 
@@ -155,26 +156,38 @@ def get_combined_retriever(main_db, session_db=None):
             search_type="similarity",
             search_kwargs={'k': 5}
         )
+        
     main_retriever = main_db.as_retriever(
         search_type="similarity",
-        search_kwargs={'k': 5} 
+        search_kwargs={'k': 3}
     )
     
     session_retriever = session_db.as_retriever(
         search_type="similarity", 
-        search_kwargs={'k': 5}
+        search_kwargs={'k': 2}
     )
-    
-    class CombinedRetriever(BaseRetriever):
+
+    class CombinedRetriever(BaseRetriever, return_source_docs=True):
         def get_relevant_documents(self, query: str) -> List[Document]:
             session_docs = session_retriever.get_relevant_documents(query)
             main_docs = main_retriever.get_relevant_documents(query)
-            combined_docs = session_docs + main_docs
+            seen_content = set()
+            combined_docs = []
+            
+            for doc in session_docs + main_docs:
+                if doc.page_content not in seen_content:
+                    seen_content.add(doc.page_content)
+                    combined_docs.append(doc)
+                    
             return combined_docs
             
         async def aget_relevant_documents(self, query: str) -> List[Document]:
-            raise NotImplementedError("Async retrieval not implemented")
-            
+            """Async version of get_relevant_documents"""
+            return await asyncio.gather(
+                session_retriever.aget_relevant_documents(query),
+                main_retriever.aget_relevant_documents(query)
+            )
+
     return CombinedRetriever()
 
 def get_qa_chain(retriever, _llm, _memory):
