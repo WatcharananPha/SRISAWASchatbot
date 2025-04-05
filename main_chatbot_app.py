@@ -55,7 +55,7 @@ llm = ChatOpenAI(
     openai_api_key="sk-GqA4Uj6iZXaykbOzIlFGtmdJr6VqiX94NhhjPZaf81kylRzh",
     openai_api_base="https://api.opentyphoon.ai/v1",
     model_name="typhoon-v2-70b-instruct",
-    temperature=1.0,
+    temperature=0.5,
     max_tokens=4096,
 )
 
@@ -109,18 +109,32 @@ def process_uploaded_files(uploaded_files):
 def create_session_vector_store(text_content, _lc_embed_model):
     if not text_content:
         return None
-        
+    
     text_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n", ".", "!", "?", ";"],
         chunk_size=128,
         chunk_overlap=64,
         length_function=len,
         is_separator_regex=False,
+        keep_separator=True
     )
+
+    text_content = text_content.replace('\r', '\n')
+    text_content = ' '.join(text_content.split())
+
     chunks = text_splitter.split_text(text_content)
+    
     if not chunks:
         return None
-        
-    documents = [Document(page_content=chunk) for chunk in chunks]
+
+    documents = [
+        Document(
+            page_content=chunk,
+            metadata={"chunk_id": i, "source": "uploaded_document"}
+        ) 
+        for i, chunk in enumerate(chunks)
+    ]
+    
     try:
         session_store = FAISS.from_documents(
             documents=documents,
