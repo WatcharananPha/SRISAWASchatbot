@@ -109,18 +109,40 @@ def process_uploaded_files(uploaded_files):
 def create_session_vector_store(text_content, _lc_embed_model):
     if not text_content:
         return None
-        
+
+    CHUNK_SIZE = 128
+    CHUNK_OVERLAP = 64
+    
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=128,
-        chunk_overlap=64,
+        separators=["\n\n", "\n", ".", "!", "?", ";"],
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
         length_function=len,
         is_separator_regex=False,
+        keep_separator=True
     )
+
+    text_content = text_content.replace('\r', '\n')
+    text_content = ' '.join(text_content.split())
+
     chunks = text_splitter.split_text(text_content)
+    
     if not chunks:
         return None
-        
-    documents = [Document(page_content=chunk) for chunk in chunks]
+
+    documents = [
+        Document(
+            page_content=chunk,
+            metadata={
+                "chunk_id": i,
+                "source": "uploaded_document",
+                "timestamp": str(pd.Timestamp.now()),
+                "character_range": f"Characters {i*CHUNK_SIZE}-{(i+1)*CHUNK_SIZE}"
+            }
+        ) 
+        for i, chunk in enumerate(chunks)
+    ]
+    
     try:
         session_store = FAISS.from_documents(
             documents=documents,
@@ -208,13 +230,36 @@ def get_qa_chain(retriever, _llm, _memory):
         )
     return qa_chain
 
+def get_reference_info(source_documents: List[Document]) -> str:
+    if not source_documents:
+        return "No reference information available"
+    
+    references = []
+    for i, doc in enumerate(source_documents, 1):
+        source = doc.metadata.get('source', 'Unknown source')
+        preview = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
+        
+        reference = f"Reference {i}:\n"
+        reference += f"- Source: {source}\n"
+        reference += f"- Preview: {preview}"
+        references.append(reference)
+    
+    return "\n\n".join(references) 
+
 def format_response(response_dict, query):
     answer = response_dict.get('result', "Sorry, I couldn't generate a response.")
+    source_documents = response_dict.get('source_documents', [])
+    references = get_reference_info(source_documents)
     image_url = find_best_match(query, st_model, stored_texts, stored_embeddings)
+    formatted_response = []
     if image_url:
-        return f"![Relevant Image]({image_url})\n\n{answer}"
-    else:
-        return answer
+        formatted_response.append(f"![Relevant Image]({image_url})")
+    
+    formatted_response.append(answer)
+    formatted_response.append("\n---\n**Source References:**")
+    formatted_response.append(references)
+    
+    return "\n\n".join(formatted_response)
 
 def load_chat_history():
     try:
