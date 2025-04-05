@@ -401,7 +401,6 @@ def manage_chat_history():
                     ].iloc[0]['Content']
                     
                     with st.expander(f"💬 {get_chat_preview(first_message)}", expanded=False):
-                        # Add summary toggle
                         show_summary = st.checkbox("Show Summary", key=f"summary_toggle_{chat_id}")
                         
                         if show_summary:
@@ -414,7 +413,6 @@ def manage_chat_history():
                             st.markdown(f"_{summary}_")
                             st.divider()
                         
-                        # Load chat button
                         if st.button(
                             "Load Full Chat",
                             key=f"chat_button_{chat_id}",
