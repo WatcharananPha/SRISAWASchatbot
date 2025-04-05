@@ -109,18 +109,32 @@ def process_uploaded_files(uploaded_files):
 def create_session_vector_store(text_content, _lc_embed_model):
     if not text_content:
         return None
-        
+    
     text_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n", ".", "!", "?", ";"],
         chunk_size=128,
         chunk_overlap=64,
         length_function=len,
         is_separator_regex=False,
+        keep_separator=True
     )
+
+    text_content = text_content.replace('\r', '\n')
+    text_content = ' '.join(text_content.split())
+
     chunks = text_splitter.split_text(text_content)
+    
     if not chunks:
         return None
-        
-    documents = [Document(page_content=chunk) for chunk in chunks]
+
+    documents = [
+        Document(
+            page_content=chunk,
+            metadata={"chunk_id": i, "source": "uploaded_document"}
+        ) 
+        for i, chunk in enumerate(chunks)
+    ]
+    
     try:
         session_store = FAISS.from_documents(
             documents=documents,
