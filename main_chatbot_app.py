@@ -261,6 +261,27 @@ def format_response(response_dict, query):
     
     return "\n\n".join(formatted_response)
 
+def summarize_chat_content(messages, max_words=150):
+    if not messages:
+        return "No messages to summarize"
+    
+    summary_prompt = f"""
+    Please summarize this conversation about Srisawad Company in {max_words} words or less.
+    If the conversation is in Thai, provide the summary in Thai.
+    If in English, provide the summary in English.
+    Focus on key points and outcomes.
+
+    Conversation:
+    {' '.join([f"{msg['role']}: {msg['content']}" for msg in messages])}
+
+    Summary:
+    """
+    
+    try:
+        return llm.predict(summary_prompt)
+    except Exception as e:
+        return f"Could not generate summary: {str(e)}"
+
 def load_chat_history():
     try:
         with open("chat_history.json", "r", encoding="utf-8") as f:
@@ -299,9 +320,9 @@ def manage_chat_history():
             """
             <style>
                 [data-testid="stSidebar"] {
-                    min-width: 400px !important;
-                    max-width: 400px !important;
-                    width: 400px !important;
+                    min-width: 450px !important;
+                    max-width: 450px !important;
+                    width: 450px !important;
                     transition: width 0.3s;
                 }
                 [data-testid="stSidebarNav"] {
@@ -351,7 +372,7 @@ def manage_chat_history():
         
         st.divider()
         history = load_chat_history()
-        
+
         if history["chats"]:
             chat_data = []
             for chat_id, chat_info in history["chats"].items():
@@ -372,25 +393,40 @@ def manage_chat_history():
                 day_chats = st.session_state.chat_history_df[
                     st.session_state.chat_history_df['Date'] == date
                 ]
-                
+
                 for chat_id in day_chats['ChatID'].unique():
                     chat_messages = day_chats[day_chats['ChatID'] == chat_id]
                     first_message = chat_messages[
                         chat_messages['Role'] == 'user'
                     ].iloc[0]['Content']
                     
-                    if st.button(
-                        f"{get_chat_preview(first_message)}",
-                        key=f"chat_button_{chat_id}",
-                        use_container_width=True
-                    ):
-                        st.session_state.messages = [
-                            {"role": msg["role"].lower(), "content": msg["content"]}
-                            for msg in history["chats"][chat_id]["messages"]
-                        ]
-                        st.session_state.current_chat_id = chat_id
-                        st.session_state.session_vector_store = None
-                        st.rerun()
+                    with st.expander(f"💬 {get_chat_preview(first_message)}", expanded=False):
+                        # Add summary toggle
+                        show_summary = st.checkbox("Show Summary", key=f"summary_toggle_{chat_id}")
+                        
+                        if show_summary:
+                            messages = [
+                                {"role": row["Role"], "content": row["Content"]}
+                                for _, row in chat_messages.iterrows()
+                            ]
+                            summary = summarize_chat_content(messages)
+                            st.markdown("**Chat Summary:**")
+                            st.markdown(f"_{summary}_")
+                            st.divider()
+                        
+                        # Load chat button
+                        if st.button(
+                            "Load Full Chat",
+                            key=f"chat_button_{chat_id}",
+                            use_container_width=True
+                        ):
+                            st.session_state.messages = [
+                                {"role": msg["role"].lower(), "content": msg["content"]}
+                                for msg in history["chats"][chat_id]["messages"]
+                            ]
+                            st.session_state.current_chat_id = chat_id
+                            st.session_state.session_vector_store = None
+                            st.rerun()
 
 def delete_chat_history():
     try:
