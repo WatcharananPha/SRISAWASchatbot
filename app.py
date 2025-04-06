@@ -81,76 +81,84 @@ def find_best_match(user_input, _st_model, _stored_texts, _stored_embeddings, th
         best_match = _stored_texts[best_index]
         return image_data.get(best_match, None)
     return None
-
-def process_uploaded_files(uploaded_files):
-    all_text = ""
-    temp_dir = TEMP_UPLOAD_DIR
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    for uploaded_file in uploaded_files:
-        try:
-            if uploaded_file.name.lower().endswith('.pdf'):
-                pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.getvalue()))
-                for page in pdf_reader.pages:
-                    all_text += page.extract_text() + "\n\n"
-            
-            elif uploaded_file.name.lower().endswith('.txt'):
-                text_content = uploaded_file.getvalue().decode('utf-8')
-                all_text += text_content + "\n\n"
-            
-            st.write(f"Processed file: {uploaded_file.name}")
-            
-        except Exception as e:
-            st.error(f"Error processing {uploaded_file.name}: {str(e)}")
-            continue
-    
-    return all_text.strip()
-
-def create_session_vector_store(text_content, _lc_embed_model):
-    if not text_content:
-        return None
-
-    CHUNK_SIZE = 128
-    CHUNK_OVERLAP = 64
-    
+def process_and_vectorize_files(uploaded_files, _lc_embed_model):
     text_splitter = RecursiveCharacterTextSplitter(
-        separators=["\n\n", "\n", ".", "!", "?", ";"],
-        chunk_size=CHUNK_SIZE,
-        chunk_overlap=CHUNK_OVERLAP,
+        separators=["\n\n", "\n", ".", "!", "?", ";", ":", " "],
+        chunk_size=1000,
+        chunk_overlap=200,
         length_function=len,
         is_separator_regex=False,
         keep_separator=True
     )
-
-    text_content = text_content.replace('\r', '\n')
-    text_content = ' '.join(text_content.split())
-
-    chunks = text_splitter.split_text(text_content)
     
-    if not chunks:
+    all_documents = []
+    os.makedirs(TEMP_UPLOAD_DIR, exist_ok=True)
+    
+    for uploaded_file in uploaded_files:
+        try:
+            file_content = ""
+            file_name = uploaded_file.name
+            if file_name.lower().endswith('.pdf'):
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.getvalue()))
+                for page_num, page in enumerate(pdf_reader.pages):
+                    text = page.extract_text()
+                    if text:
+                        text = text.replace('\r', '\n')
+                        text = ' '.join(text.split())
+                        chunks = text_splitter.split_text(text)
+                        
+                        for i, chunk in enumerate(chunks):
+                            all_documents.append(
+                                Document(
+                                    page_content=chunk,
+                                    metadata={
+                                        "source": file_name,
+                                        "page": page_num + 1,
+                                        "chunk": i + 1,
+                                        "chunk_size": len(chunk),
+                                        "timestamp": str(pd.Timestamp.now())
+                                    }
+                                )
+                            )
+                
+            elif file_name.lower().endswith('.txt'):
+                text = uploaded_file.getvalue().decode('utf-8')
+                text = text.replace('\r', '\n')
+                text = ' '.join(text.split())
+                chunks = text_splitter.split_text(text)
+                
+                for i, chunk in enumerate(chunks):
+                    all_documents.append(
+                        Document(
+                            page_content=chunk,
+                            metadata={
+                                "source": file_name,
+                                "chunk": i + 1,
+                                "chunk_size": len(chunk),
+                                "timestamp": str(pd.Timestamp.now())
+                            }
+                        )
+                    )
+            
+            st.write(f"✅ Processed {file_name} - Created {len(chunks)} semantic chunks")
+            
+        except Exception as e:
+            st.error(f"❌ Error processing {file_name}: {str(e)}")
+            continue
+
+    if not all_documents:
+        st.error("No documents were successfully processed")
         return None
 
-    documents = [
-        Document(
-            page_content=chunk,
-            metadata={
-                "chunk_id": i,
-                "source": "uploaded_document",
-                "timestamp": str(pd.Timestamp.now()),
-                "character_range": f"Characters {i*CHUNK_SIZE}-{(i+1)*CHUNK_SIZE}"
-            }
-        ) 
-        for i, chunk in enumerate(chunks)
-    ]
-    
     try:
         session_store = FAISS.from_documents(
-            documents=documents,
+            documents=all_documents,
             embedding=_lc_embed_model
         )
+        st.success(f"Created vector store with {len(all_documents)} total chunks")
         return session_store
     except Exception as e:
-        st.error(f"Error creating session vector store: {str(e)}")
+        st.error(f"Error creating vector store: {str(e)}")
         return None
 
 def get_main_vector_database(_lc_embed_model):
@@ -457,15 +465,10 @@ def main():
         if uploaded_files:
             if "uploaded_files_obj" not in st.session_state or st.session_state.uploaded_files_obj != uploaded_files:
                 st.session_state.uploaded_files_obj = uploaded_files
-                text_content = process_uploaded_files(uploaded_files)
-                if text_content:
-                    with st.spinner("Creating vector embeddings for uploaded documents..."):
-                        session_store = create_session_vector_store(text_content, lc_embed_model)
-                        if session_store:
-                            st.success("Documents processed and ready for queries!")
-                            st.session_state.session_vector_store = session_store
-                        else:
-                            st.error("Failed to create vector embeddings for uploaded documents.")
+                with st.spinner("Processing documents and creating vector embeddings..."):
+                    session_store = process_and_vectorize_files(uploaded_files, lc_embed_model)
+                    if session_store:
+                        st.session_state.session_vector_store = session_store
 
     if "current_chat_id" not in st.session_state:
         st.session_state.current_chat_id = f"chat_{int(time.time())}"
