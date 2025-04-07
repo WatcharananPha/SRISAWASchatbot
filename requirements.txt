@@ -1,14 +1,6 @@
 streamlit
 nest-asyncio
-llama-parse
 langchain
 langchain-openai
-huggingface-hub
 langchain-community
 sentence-transformers
-faiss-cpu
-PyPDF2
-pandas
-numpy
-python-dotenv
-typing
