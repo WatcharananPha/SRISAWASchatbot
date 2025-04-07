@@ -260,6 +260,7 @@ def format_response(response_dict, query):
     references = get_reference_info(source_documents)
     image_url = find_best_match(query, st_model, stored_texts, stored_embeddings)
     formatted_response = []
+    
     if image_url:
         formatted_response.append(f"![Relevant Image]({image_url})")
     
