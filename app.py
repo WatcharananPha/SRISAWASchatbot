@@ -44,9 +44,9 @@ def load_embedding_models():
 st_model, lc_embed_model = load_embedding_models()
 image_data = {
     "ขั้นตอน": "https://www.sawad.co.th/wp-content/uploads/2024/10/452800239_896789245826573_6595247655261158306_n-819x1024.jpg",
-    "ขอเพิ่มวงเงินออนไลน์": "https://scontent.fbkk12-4.fna.fbcdn.net/v/t39.30808-6/471255214_8877507648984508_946598690423709697_n.jpg?_nc_cat=103&ccb=1-7&_nc_sid=127cfc&_nc_ohc=Hwl14FsD6KsQ7kNvgH9t73V&_nc_oc=AdlP-NscLBQr5xC6O9LFXEDWaQeHBLBJGuAO0qxQHY6qFDfXRl1-qgRItmHIn5xP6bmzLSP449Rj69v4_o0Ba3Z4&_nc_zt=23&_nc_ht=scontent.fbkk12-4.fna&_nc_gid=-w2mEHH-dNKmmxiXiJoAAA&oh=00_AYEE-K8b8Q3b-eflPexlGo6xc21lzl8AL54OKNJaHS5_vA&oe=67F13AB5",
+    "ขอเพิ่มวงเงินออนไลน์": "https://scontent.fbkk12-4.fna.fbcdn.net/v/t39.30808-6/482015418_1063665659138930_5894050534545491298_n.jpg?_nc_cat=103&ccb=1-7&_nc_sid=127cfc&_nc_ohc=8wDEWQ74uA0Q7kNvwF9fFof&_nc_oc=AdkvyI1zwcFJNjR-2iD4og8udVXWpLN_5uesiBveQP2yfDPTH8TkZArrCO46TtOw4-xiAQpNA96GNIuJaEN14Opv&_nc_zt=23&_nc_ht=scontent.fbkk12-4.fna&_nc_gid=2dJs9jvVw2jVHnzs_QkMJw&oh=00_AfHfIPpx7v7wlIKaR7s0h7dsXSEvowj1FXgyI_LrcJT5sA&oe=67FAB6DE",
     "เอกสาร": "https://scontent.fbkk12-5.fna.fbcdn.net/v/t1.6435-9/49372192_1985324158202926_1335522292599357440_n.jpg?_nc_cat=110&ccb=1-7&_nc_sid=127cfc&_nc_ohc=rZze6y4lyHwQ7kNvgExWIqY&_nc_oc=AdnR5Cx9QKLZmEB6VJ8vMwWqyhrZL5kqyxu-3S0zmn3XGK8evwrKL0WaCWASxEPkVzINNLD2hXI0LCvDpO9XazjC&_nc_zt=23&_nc_ht=scontent.fbkk12-5.fna&_nc_gid=8hNFyuKaJw90Gdkr7oa06g&oh=00_AYEhL4EmzLra2C01JcDkjDRB4sz4bwWdD1G7Yi2eGrfI8g&oe=680A2CB5",
-    "ประกันภัยรถยนต์": "https://scontent.fbkk12-1.fna.fbcdn.net/v/t39.30808-6/486135644_1074484228057073_8174681586289252031_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=127cfc&_nc_ohc=5Dh2aGLdmMoQ7kNvgHfvWgs&_nc_oc=AdlWrWObPq0uusPLZeKFc4PaAttTPJPAp-Xf7mCbCrC2nClYldVN7MCP82r7E4tvibJ2IHQmJ7cBtKS-GxL2pT2J&_nc_zt=23&_nc_ht=scontent.fbkk12-1.fna&_nc_gid=NLRQU4IaSV8ZqRE4bnl37g&oh=00_AYHqVxlhwnfqdZYK82aAIXlDdE4GZSW7dCTgo8Yraj1h3w&oe=67E8ADAA"
+    "ประกันภัยรถยนต์": "https://scontent.fbkk12-1.fna.fbcdn.net/v/t39.30808-6/486135644_1074484228057073_8174681586289252031_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=127cfc&_nc_ohc=hHPdndjlsRAQ7kNvwEL6KV7&_nc_oc=AdkfYiCDE3TelwSCVgOkAX6PYICzS4BmyQ5LVU_6tz4FxO3Txhf6l6HnB8pRo9Ds9OdIwmujYo5W3Ex8ItiqYqy-&_nc_zt=23&_nc_ht=scontent.fbkk12-1.fna&_nc_gid=DIq9la1liQ-GEBorkQj_8Q&oh=00_AfEKD1YYoBXXJC1inH7wP6L_AL2fkV1AJtVa_D4AS_dIQQ&oe=67FAB22A"
 }
 stored_texts = list(image_data.keys())
 stored_embeddings = st_model.encode(stored_texts)
@@ -56,7 +56,7 @@ llm = ChatOpenAI(
     openai_api_base="https://api.opentyphoon.ai/v1",
     model_name="typhoon-v2-70b-instruct",
     temperature=0.5,
-    max_tokens=4096,
+    max_tokens=8192,
 )
 
 if "memory" not in st.session_state:
@@ -81,6 +81,7 @@ def find_best_match(user_input, _st_model, _stored_texts, _stored_embeddings, th
         best_match = _stored_texts[best_index]
         return image_data.get(best_match, None)
     return None
+
 def process_and_vectorize_files(uploaded_files, _lc_embed_model):
     text_splitter = RecursiveCharacterTextSplitter(
         separators=["\n\n", "\n", ".", "!", "?", ";", ":", " "],
@@ -140,7 +141,7 @@ def process_and_vectorize_files(uploaded_files, _lc_embed_model):
                         )
                     )
             
-            st.write(f"✅ Processed {file_name} - Created {len(chunks)} semantic chunks")
+            st.write(f"✅ Processed {file_name} - Created {len(chunks)} chunks")
             
         except Exception as e:
             st.error(f"❌ Error processing {file_name}: {str(e)}")
@@ -238,12 +239,12 @@ def get_qa_chain(retriever, _llm, _memory):
         )
     return qa_chain
 
-def get_reference_info(source_documents: List[Document]) -> str:
+def get_reference_info(source_documents: List[Document], max_references: int = 3) -> str:
     if not source_documents:
         return "No reference information available"
     
     references = []
-    for i, doc in enumerate(source_documents, 1):
+    for i, doc in enumerate(source_documents[:max_references], 1):  # Limit to max_references
         source = doc.metadata.get('source', 'Unknown source')
         preview = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
         
@@ -252,7 +253,7 @@ def get_reference_info(source_documents: List[Document]) -> str:
         reference += f"- Preview: {preview}"
         references.append(reference)
     
-    return "\n\n".join(references) 
+    return "\n\n".join(references)
 
 def format_response(response_dict, query):
     answer = response_dict.get('result', "Sorry, I couldn't generate a response.")
@@ -325,10 +326,9 @@ def get_chat_preview(content, max_length=30):
 
 def manage_chat_history():
     with st.sidebar:
-        st.markdown(
-            """
+        st.markdown("""
             <style>
-                [data-testid="stSidebar"] {
+                    [data-testid="stSidebar"] {
                     min-width: 450px !important;
                     max-width: 450px !important;
                     width: 450px !important;
@@ -357,13 +357,38 @@ def manage_chat_history():
                     font-size: 18px;
                     padding: 5px 0;
                 }
+                    
+                /* Existing styles... */
+                
+                /* Add smooth transition for sidebar */
+                [data-testid="stSidebar"] {
+                    transition: all 0.3s ease-in-out;
+                }
+
+                /* Hide sidebar when not shown */
+                [data-testid="stSidebar"][aria-expanded="false"] {
+                    margin-left: -450px;
+                }
+                
+                /* Style for delete button */
+                .stButton.delete-button button {
+                    background-color: transparent;
+                    color: #ff4b4b;
+                    border: none;
+                    padding: 0;
+                    height: 30px;
+                    width: 30px;
+                    border-radius: 50%;
+                }
+                .stButton.delete-button button:hover {
+                    background-color: #ffeded;
+                }
             </style>
-            """,
-            unsafe_allow_html=True
-        )
+        """, unsafe_allow_html=True)
+
 
         st.markdown('<h1 style="text-align: center; font-size: 32px;">Chat History</h1>', unsafe_allow_html=True)
-        
+
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🗪 New Chat", type="primary", use_container_width=True):
@@ -378,7 +403,7 @@ def manage_chat_history():
                     st.session_state.current_chat_id = f"chat_{int(time.time())}"
                     st.session_state.session_vector_store = None
                     st.rerun()
-        
+
         st.divider()
         history = load_chat_history()
 
@@ -392,13 +417,13 @@ def manage_chat_history():
                         "Content": msg["content"],
                         "Timestamp": pd.to_datetime(msg["timestamp"])
                     })
-            
+
             st.session_state.chat_history_df = pd.DataFrame(chat_data)
             st.session_state.chat_history_df['Date'] = st.session_state.chat_history_df['Timestamp'].dt.date
             dates = sorted(st.session_state.chat_history_df['Date'].unique(), reverse=True)
-            
+
             for date in dates:
-                st.subheader(date.strftime('%Y-%m-%d'))
+                st.markdown(f'<div class="chat-header">{date.strftime("%Y-%m-%d")}</div>', unsafe_allow_html=True)
                 day_chats = st.session_state.chat_history_df[
                     st.session_state.chat_history_df['Date'] == date
                 ]
@@ -408,32 +433,41 @@ def manage_chat_history():
                     first_message = chat_messages[
                         chat_messages['Role'] == 'user'
                     ].iloc[0]['Content']
-                    
-                    with st.expander(f"💬 {get_chat_preview(first_message)}", expanded=False):
-                        show_summary = st.checkbox("Show Summary", key=f"summary_toggle_{chat_id}")
-                        
-                        if show_summary:
-                            messages = [
-                                {"role": row["Role"], "content": row["Content"]}
-                                for _, row in chat_messages.iterrows()
-                            ]
-                            summary = summarize_chat_content(messages)
-                            st.markdown("**Chat Summary:**")
-                            st.markdown(f"_{summary}_")
-                            st.divider()
-                        
-                        if st.button(
-                            "Load Full Chat",
-                            key=f"chat_button_{chat_id}",
-                            use_container_width=True
-                        ):
-                            st.session_state.messages = [
-                                {"role": msg["role"].lower(), "content": msg["content"]}
-                                for msg in history["chats"][chat_id]["messages"]
-                            ]
-                            st.session_state.current_chat_id = chat_id
-                            st.session_state.session_vector_store = None
-                            st.rerun()
+
+                    col1, col2 = st.columns([8, 1])
+                    with col1:
+                        with st.expander(f"{get_chat_preview(first_message)}", expanded=False):
+                            show_summary = st.checkbox("Show Summary", key=f"summary_toggle_{chat_id}")
+                            if show_summary:
+                                messages = [
+                                    {"role": row["Role"], "content": row["Content"]}
+                                    for _, row in chat_messages.iterrows()
+                                ]
+                                summary = summarize_chat_content(messages)
+                                st.markdown("**Chat Summary:**")
+                                st.markdown(f"_{summary}_")
+                                st.divider()
+
+                            if st.button(
+                                "Load Full Chat",
+                                key=f"chat_button_{chat_id}",
+                                use_container_width=True
+                            ):
+                                st.session_state.messages = [
+                                    {"role": msg["role"].lower(), "content": msg["content"]}
+                                    for msg in history["chats"][chat_id]["messages"]
+                                ]
+                                st.session_state.current_chat_id = chat_id
+                                st.session_state.session_vector_store = None
+                                st.rerun()
+
+                    with col2:
+                        if st.button("🗑️", key=f"delete_{chat_id}", help="Delete Chat"):
+                            if delete_single_chat(chat_id):
+                                st.session_state.messages = []
+                                st.session_state.current_chat_id = f"chat_{int(time.time())}"
+                                st.session_state.session_vector_store = None
+                                st.rerun()
 
 def delete_chat_history():
     try:
@@ -443,11 +477,25 @@ def delete_chat_history():
     except Exception:
         return False
 
+def delete_single_chat(chat_id):
+    try:
+        history = load_chat_history()
+        if chat_id in history["chats"]:
+            del history["chats"][chat_id]
+            save_chat_history(history)
+            return True
+    except Exception:
+        return False
+    return False
+
+if 'show_sidebar' not in st.session_state:
+    st.session_state.show_sidebar = False 
+
 def main():
     st.markdown(
         """
         <div style="text-align: center;">
-            <img src="https://cdn-cncpm.nitrocdn.com/DpTaQVKLCVHUePohOhFgtgFLWoUOmaMZ/assets/images/optimized/rev-99fcfef/www.sawad.co.th/wp-content/uploads/2020/12/logo.png.webp" width="300">
+            <img src="https://cdn-cncpm.nitrocdn.com/DpTaQVKLCVHUePohOhFgtgFLWoUOmaMZ/assets/images/optimized/rev-5be2389/www.sawad.co.th/wp-content/uploads/2020/12/logo.png" width="300">
             <h1 style="font-size: 40px; font-weight: bold; margin-top: 20px;">Srisawad Chatbot Demo</h1>
         </div>
         """,

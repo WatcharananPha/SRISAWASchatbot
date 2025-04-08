@@ -4,7 +4,7 @@ langchain>=0.1.12
 langchain-openai>=0.0.8
 langchain-community>=0.0.28
 sentence-transformers==2.5.1
-transformers==4.38.2
+transformers==4.48.0
 torch==2.2.1
 faiss-cpu==1.7.4
 PyPDF2==3.0.1
