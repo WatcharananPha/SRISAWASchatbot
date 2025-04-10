@@ -155,6 +155,7 @@ def process_and_vectorize_files(uploaded_files, _lc_embed_model):
             elif file_name.lower().endswith('.xlsx'):
                 excel_data = pd.read_excel(io.BytesIO(file_content_bytes), sheet_name=None)
                 for sheet_name, df in excel_data.items():
+
                     sheet_text = df.to_string(index=False)
                     sheet_text = ' '.join(sheet_text.split())
                     chunks = text_splitter.split_text(sheet_text)
@@ -177,13 +178,12 @@ def process_and_vectorize_files(uploaded_files, _lc_embed_model):
                 encodings_to_try = ['utf-8', 'tis-620', 'latin-1', 'cp874']
                 for enc in encodings_to_try:
                      try:
-
                          df = pd.read_csv(io.BytesIO(file_content_bytes), encoding=enc, on_bad_lines='warn')
                          break 
                      except (UnicodeDecodeError, pd.errors.ParserError):
                          file_content_bytes.seek(0)
                          continue 
-                     except Exception as read_err: 
+                     except Exception as read_err:
                          st.warning(f"Could not read {file_name} with encoding {enc}: {read_err}")
                          file_content_bytes.seek(0)
                          continue
@@ -191,7 +191,7 @@ def process_and_vectorize_files(uploaded_files, _lc_embed_model):
 
                 if df is None:
                     raise ValueError(f"Could not parse CSV {file_name} with common encodings.")
-                
+
                 csv_text = df.to_string(index=False)
                 csv_text = ' '.join(csv_text.split())
                 chunks = text_splitter.split_text(csv_text)
@@ -217,6 +217,7 @@ def process_and_vectorize_files(uploaded_files, _lc_embed_model):
                  processed_files_count += 1
             else:
                  st.warning(f"⚠️ No content extracted or processed for {file_name}")
+
 
         except Exception as e:
             st.error(f"❌ Error processing {file_name}: {str(e)}")
@@ -319,7 +320,7 @@ def get_reference_info(source_documents: List[Document], max_references: int = 3
         return "No reference information available"
     
     references = []
-    for i, doc in enumerate(source_documents[:max_references], 1):  # Limit to max_references
+    for i, doc in enumerate(source_documents[:max_references], 1): 
         source = doc.metadata.get('source', 'Unknown source')
         preview = doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content
         
