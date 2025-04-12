@@ -3,6 +3,8 @@ import os
 import json
 import time
 import pandas as pd
+
+
 import nest_asyncio
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
@@ -18,8 +20,7 @@ OPENAI_API_KEY = "sk-GqA4Uj6iZXaykbOzIlFGtmdJr6VqiX94NhhjPZaf81kylRzh"
 OPENAI_API_BASE = "https://api.opentyphoon.ai/v1"
 MODEL_NAME = "typhoon-v2-70b-instruct"
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
-JSON_PATH = "Jsonfile/M.JSON"
-RATE_BOOK_PATH = "Data real\Car rate book.xlsx"
+JSON_PATH = "Jsonfile/merged_data.json"
 CHAT_HISTORY_FILE = "chat_history_policy.json"
 
 st.set_page_config(
@@ -142,79 +143,6 @@ def delete_single_chat(chat_id):
     return False
 
 @st.cache_resource
-def load_and_process_data(_embeddings):
-
-    if not _embeddings:
-        st.error("Embedding model not loaded. Cannot process data.")
-        return None
-    try:
-        all_documents = [] # Initialize to store docs from both sources
-
-        json_dir = os.path.dirname(JSON_PATH)
-        os.makedirs(json_dir, exist_ok=True)
-
-        if os.path.exists(JSON_PATH):
-            with open(JSON_PATH, "r", encoding="utf-8") as f:
-                policy_data = json.load(f)
-
-            root_key = "นโยบายสินเชื่อ_รวม" if "นโยบายสินเชื่อ_รวม" in policy_data else None
-            json_docs = parse_json_to_docs(policy_data.get(root_key, policy_data), parent_key=f"{root_key}." if root_key else "")
-            all_documents.extend(json_docs) # Add json docs to combined list
-
-        else:
-            st.warning(f"JSON file not found at: {JSON_PATH}. Only processing the rate book.")
-
-
-        # --- Process Excel File ---
-        if os.path.exists(RATE_BOOK_PATH):
-            try:
-                df_rates = pd.read_excel(RATE_BOOK_PATH)
-
-                # Convert dates to standard format if needed:
-                date_cols = ["FDATEA", "LDATEA"]
-                for col in date_cols:
-                    if col in df_rates.columns:
-                        try:
-                             df_rates[col] = pd.to_datetime(df_rates[col], format='%d-%b-%y', errors='coerce').dt.strftime('%Y-%m-%d')
-                        except Exception as date_err:
-                             st.warning(f"Could not convert dates in '{col}' to YYYY-MM-DD format: {date_err}")
-
-                for index, row in df_rates.iterrows():
-                    # Create page content by joining non-null values
-                    content_parts = [f"{k}: {v}" for k, v in row.items() if pd.notna(v)]
-                    page_content = "\n".join(content_parts)
-
-                    metadata = {
-                         "source": "Car Rate Book", # Consistent source label
-                         "row": index, # Use row as a unique identifier
-                         # Include some important fields directly in metadata for later filtering/display
-                         "model": row.get("MODELCOD"),
-                         "year": row.get("MANUYR"),
-                         "rate": row.get("RATE")
-                    }
-                    doc = Document(page_content=page_content, metadata=metadata)
-                    all_documents.append(doc)
-
-            except Exception as e:
-                st.error(f"Error processing Excel file ({RATE_BOOK_PATH}): {e}")
-                return None
-        else:
-            st.warning(f"Excel file not found at: {RATE_BOOK_PATH}. Only processing the JSON data.")
-
-
-        if not all_documents:
-            st.error("No documents were successfully created from any data source.")
-            return None
-
-        vectorstore = FAISS.from_documents(all_documents, _embeddings)
-        st.success(f"Knowledge base loaded. {len(all_documents)} sections processed from JSON and Excel.")
-        return vectorstore
-
-    except Exception as e:
-        st.error(f"Error processing data/creating vector store: {e}")
-        return None
-
-@st.cache_resource
 def load_llm():
     return ChatOpenAI(
         openai_api_key=OPENAI_API_KEY,
@@ -247,19 +175,18 @@ def load_and_process_data(_embeddings):
 @st.cache_resource
 def create_chain(_llm, _retriever):
     prompt_template = """
-    You are a helpful AI assistant for Srisawad, specializing in their loan policies and car rate information. Use ONLY the provided context to answer the user's questions in Thai.  If the answer is not directly in the context, state that you cannot find the specific information in the provided policy documents or car rate book.  Do not make up information or use external knowledge. Be concise.
+    คุณคือผู้ช่วย AI ที่เชี่ยวชาญด้านนโยบายสินเชื่อ กรุณาตอบคำถามต่อไปนี้โดยใช้ข้อมูลที่ให้มาเท่านั้น:
+    ข้อมูลที่เกี่ยวข้อง (Context):
+    {context}
 
-        Context:
-        {context}
+    คำถาม:
+    {input}
 
-        Question: {input}
-
-        Answer (Thai):
-     """
+    คำตอบ (เป็นภาษาไทย):
+    """
     prompt = ChatPromptTemplate.from_template(prompt_template)
     document_chain = create_stuff_documents_chain(_llm, prompt)
-    retrieval_chain = create_retrieval_chain(_retriever, document_chain)
-    return retrieval_chain
+    return create_retrieval_chain(_retriever, document_chain)
 
 def apply_custom_css():
     st.markdown("""
