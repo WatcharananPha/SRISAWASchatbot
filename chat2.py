@@ -437,7 +437,7 @@ def load_policy_data():
     prompt_template = """
     คุณคือผู้ช่วย AI ที่เชี่ยวชาญด้านนโยบายสินเชื่อ กรุณาตอบคำถามต่อไปนี้โดยใช้ข้อมูลที่ให้มาเท่านั้น และเพิ่มบริบทที่เกี่ยวข้องเพื่อให้เข้าใจได้ง่ายขึ้น:
 
-    ข้อมูลที่เกี่ยวข้อง (Context):
+    ข้อมูลที่เกี่ยวข้อง (Context):     
     {context}
 
     คำถาม:
@@ -782,6 +782,7 @@ def main():
                             product_group, gcode = extract_vehicle_info(response, car_data)
                             full_response = build_car_response(response, product_group, gcode)
                             typewriter_effect(message_placeholder, full_response)
+
                             save_chat_to_history(st.session_state.current_chat_id, "assistant", full_response)
                             st.session_state.messages.append({"role": "assistant", "content": full_response})
                             display_resource_cards()
