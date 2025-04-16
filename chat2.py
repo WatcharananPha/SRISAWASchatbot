@@ -3,9 +3,7 @@ import os
 import json
 import time
 import pandas as pd
-import numpy as np
 import re 
-
 import nest_asyncio
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
@@ -46,16 +44,10 @@ CONTNO_TYPE_MAPPING = {
 }
 
 PRODUCT_GROUP_MAPPING = {
-    'A': 'NanoFinance',
-    'P': 'PLOAN',
-    'T': 'Truck รถบรรทุก',
-    'M': 'Motocycle มอเตอร์ไซต์',
-    'V': 'รถเกี่ยวข้าว',
-    'G': 'โคบูต้า รถไถเดินตาม',
-    'H': 'House บ้าน',
-    'L': 'Land ที่ดิน',
-    'I': 'ประกัน',
-    'C': 'รถยนต์'
+    'A': 'NanoFinance', 'P': 'PLOAN', 'T': 'Truck รถบรรทุก',
+    'M': 'Motocycle มอเตอร์ไซต์', 'V': 'รถเกี่ยวข้าว',
+    'G': 'โคบูต้า รถไถเดินตาม', 'H': 'House บ้าน',
+    'L': 'Land ที่ดิน', 'I': 'ประกัน', 'C': 'รถยนต์'
 }
 
 st.set_page_config(
@@ -63,6 +55,66 @@ st.set_page_config(
     page_icon="https://companieslogo.com/img/orig/SAWAD.BK-18d7b4df.png?t=1720244493",
     layout="centered"
 )
+
+def apply_custom_css():
+    st.markdown("""
+        <style>
+            [data-testid="stSidebar"] {
+                min-width: 450px !important;
+                max-width: 450px !important;
+                width: 450px !important;
+                transition: all 0.3s ease-in-out;
+            }
+            [data-testid="stSidebarNav"] { display: none; }
+            section[data-testid="stSidebarContent"] {
+                width: 450px !important;
+                padding-right: 1rem;
+            }
+            button[data-testid="baseButton-secondary"] { visibility: hidden; }
+            .stButton button {
+                height: 50px;
+                font-size: 16px;
+            }
+            [data-testid="stMarkdownContainer"] h1 {
+                font-size: 24px;
+                padding: 10px 0;
+                text-align: center;
+            }
+            .stSubheader {
+                font-size: 18px;
+                padding: 5px 0;
+            }
+            [data-testid="stSidebar"][aria-expanded="false"] {
+                margin-left: -450px;
+            }
+            .stButton.delete-button button {
+                background-color: transparent;
+                color: #ff4b4b;
+                border: none;
+                padding: 0;
+                height: 30px;
+                width: 30px;
+                border-radius: 50%;
+            }
+            .stButton.delete-button button:hover {
+                background-color: #ffeded;
+            }
+            div.st-cc { padding: 0.25rem; }
+            div.stRadio > label {
+                background-color: #f0f2f6;
+                padding: 10px 15px;
+                border-radius: 5px;
+                margin-right: 10px;
+                cursor: pointer;
+                transition: background-color 0.3s;
+            }
+            div.stRadio > label:hover { background-color: #e0e2e6; }
+            div.stRadio [data-testid="stMarkdownContainer"] p {
+                font-size: 16px;
+                font-weight: 500;
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
 @st.cache_resource
 def load_car_data(file_path):
@@ -88,20 +140,15 @@ def load_car_data(file_path):
 
 def format_car_row(row):
     columns_labels = {
-        'TYPECOD': 'ยี่ห้อ',
-        'MODELCOD': 'รุ่นหลัก',
-        'MODELDESC': 'รุ่นย่อย',
-        'MANUYR': 'ปีที่ผลิต',
-        'GEAR': 'เกียร์',
-        'GCODE': 'ประเภทรถ',
-        'PRODUCT GROUP': 'กลุ่มผลิตภัณฑ์',
-        'RATE': 'ราคาประเมิน'
+        'TYPECOD': 'ยี่ห้อ', 'MODELCOD': 'รุ่นหลัก', 'MODELDESC': 'รุ่นย่อย',
+        'MANUYR': 'ปีที่ผลิต', 'GEAR': 'เกียร์', 'GCODE': 'ประเภทรถ',
+        'PRODUCT GROUP': 'กลุ่มผลิตภัณฑ์', 'RATE': 'ราคาประเมิน'
     }
 
     parts = []
     for col, label in columns_labels.items():
         value = row.get(col)
-        if pd.notna(value) and str(value).strip() != '':
+        if pd.notna(value) and str(value).strip():
             if col in ['RATE', 'MANUYR']:
                 try:
                     num_value = int(value)
@@ -118,6 +165,7 @@ def get_classification_details(product_group, gcode):
     product_group_desc = PRODUCT_GROUP_MAPPING.get(product_group, 'ไม่ระบุ')
     gcode_desc = "ไม่ระบุ"
     contno_type = "ไม่ระบุ"
+    
     for type_key, gcode_dict in CONTNO_TYPE_MAPPING.items():
         if gcode in gcode_dict:
             gcode_desc = gcode_dict[gcode]
@@ -133,15 +181,38 @@ def get_classification_details(product_group, gcode):
 def build_car_response(answer, product_group, gcode):
     classification = get_classification_details(product_group, gcode)
     
-    response = f"""
+    return f"""
 {answer}
 
-รายละเอียดของเพิ่มเติม :
+รายละเอียดเพิ่มเติม :
 - ประเภทสัญญา (CONTNO_TYPE): {classification['CONTNO_TYPE']}
 - รหัสและประเภทย่อย (GCODE): {classification['GCODE_Description']}
 - กลุ่มผลิตภัณฑ์: {classification['Product_Group_Description']}
 """
-    return response
+
+@st.cache_resource
+def create_embeddings_model():
+    return HuggingFaceBgeEmbeddings(
+        model_name=EMBEDDING_MODEL_NAME,
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True},
+        query_instruction="Represent this query for retrieving relevant documents: "
+    )
+
+@st.cache_resource
+def create_embeddings_model():
+    class SafeHuggingFaceBgeEmbeddings(HuggingFaceBgeEmbeddings):
+        def embed_query(self, text):
+            if text is None:
+                text = ""
+            return super().embed_query(text)
+            
+    return SafeHuggingFaceBgeEmbeddings(
+        model_name=EMBEDDING_MODEL_NAME,
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True},
+        query_instruction="Represent this query for retrieving relevant documents: "
+    )
 
 @st.cache_resource
 def create_car_vector_store():
@@ -152,47 +223,24 @@ def create_car_vector_store():
     texts = [format_car_row(row) for _, row in car_data.iterrows()]
     documents = [Document(page_content=text, metadata={"id": str(i)}) for i, text in enumerate(texts)]
     
-    embed_model = HuggingFaceBgeEmbeddings(
-        model_name=EMBEDDING_MODEL_NAME,
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
-    )
-
+    embed_model = create_embeddings_model()
     vector_store = FAISS.from_documents(documents, embed_model)
     vector_store.save_local(VECTOR_STORE_PATH)
     return vector_store, embed_model
 
 @st.cache_resource
-def load_car_vector_store():
-    embed_model = HuggingFaceBgeEmbeddings(
-        model_name=EMBEDDING_MODEL_NAME,
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True}
-    )
-
-    if os.path.exists(VECTOR_STORE_PATH):
-        try:
-            vector_store = FAISS.load_local(VECTOR_STORE_PATH, embed_model, allow_dangerous_deserialization=True)
-            return vector_store, embed_model
-        except Exception as e:
-            st.warning(f"Error loading car vector store: {e}")
-            return create_car_vector_store()
-    else:
-        return create_car_vector_store()
-
-@st.cache_resource
 def build_car_rag_chain():
-    vector_store, _ = load_car_vector_store()
+    vector_store, _ = create_car_vector_store()
     if not vector_store:
         return None
         
-    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
     
     llm = ChatOpenAI(
         openai_api_key=OPENAI_API_KEY,
         openai_api_base=OPENAI_API_BASE,
         model_name=MODEL_NAME,
-        temperature=0.7,
+        temperature=1.0,
         max_tokens=8192,
     )
 
@@ -205,7 +253,10 @@ def build_car_rag_chain():
     คำถามจากผู้ใช้: {question}
 
     คำตอบ: (ตอบเป็นภาษาไทย โดยสรุปข้อมูลจาก 'ข้อมูลราคารถที่เกี่ยวข้อง' ที่ตรงกับคำถามมากที่สุด 
-    พร้อมระบุ PRODUCT GROUP และ GCODE ที่เกี่ยวข้องด้วย
+    พร้อมระบุข้อมูลเหล่านี้ทุกครั้ง: 
+    1. PRODUCT GROUP (ตัวอย่าง: PRODUCT GROUP: M สำหรับมอเตอร์ไซต์, C สำหรับรถยนต์, T สำหรับรถบรรทุกและรถไถ)
+    2. GCODE (ตัวอย่าง: GCODE: MC สำหรับมอเตอร์ไซต์, CA สำหรับรถเก๋ง, FT สำหรับรถไถ, P1/P2/P4 สำหรับรถกระบะ)
+
     อย่าเพิ่มข้อมูลที่ไม่มีอยู่ในข้อมูลที่ให้มา หากไม่พบข้อมูลที่ตรงกัน ให้ตอบว่า "ไม่พบข้อมูลที่เกี่ยวข้อง")
     """
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
@@ -259,12 +310,39 @@ def parse_json_to_docs(data, parent_key="", docs=None):
     return docs
 
 def append_static_url_sources(answer: str) -> str:
-    static_urls = [
-        "https://docs.google.com/spreadsheets/d/10Ol2r3_ZTkSf9KSGCjLjs9J4RepArO3tepwhErKyptI/edit?usp=sharing",
-        "https://docs.google.com/spreadsheets/d/1Zxf-8sMZOwo36IWoSPXnyhRN02BFXPVGeLYz5h6t_1s/edit?usp=sharing"
-    ]
-    url_text = "\n" + "\n".join(f"- {url}" for url in static_urls)
-    return f"{answer}\n\n---\n**แหล่งข้อมูลเพิ่มเติม:**{url_text}"
+    return f"{answer}\n\n---\n**แหล่งข้อมูลเพิ่มเติม:**"
+
+def display_resource_cards():
+    if st.session_state.chat_mode == "ราคารถ":
+        st.markdown("""
+            <div style="margin-top: 20px;">
+                <div style="display: flex; justify-content: center; gap: 20px;">
+                    <a href="https://docs.google.com/spreadsheets/d/1Zxf-8sMZOwo36IWoSPXnyhRN02BFXPVGeLYz5h6t_1s/edit?usp=sharing" target="_blank" style="text-decoration: none; color: inherit;">
+                        <div style="text-align: center; width: 150px;">
+                            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; height: 150px;">
+                                <img src="https://cdn-icons-png.flaticon.com/512/888/888850.png" width="64" height="64">
+                                <p style="margin-top: 10px; font-weight: 500; font-size: 14px;">Car rate book</p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+            <div style="margin-top: 20px;">
+                <div style="display: flex; justify-content: center; gap: 20px;">
+                    <a href="https://docs.google.com/spreadsheets/d/10Ol2r3_ZTkSf9KSGCjLjs9J4RepArO3tepwhErKyptI/edit?usp=sharing" target="_blank" style="text-decoration: none; color: inherit;">
+                        <div style="text-align: center; width: 150px;">
+                            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; height: 150px;">
+                                <img src="https://cdn-icons-png.flaticon.com/512/888/888850.png" width="64" height="64">
+                                <p style="margin-top: 10px; font-weight: 500; font-size: 14px;">Credit Policy - CTVGMHL</p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
 def load_chat_history():
     try:
@@ -341,34 +419,24 @@ def load_llm():
         openai_api_key=OPENAI_API_KEY,
         openai_api_base=OPENAI_API_BASE,
         model_name=MODEL_NAME,
-        temperature=0.7,
+        temperature=1.0,
         max_tokens=8192,
     )
 
 @st.cache_resource
-def load_embeddings():
-    return HuggingFaceBgeEmbeddings(
-        model_name=EMBEDDING_MODEL_NAME,
-        model_kwargs={'device': 'cpu'},
-        encode_kwargs={'normalize_embeddings': True},
-        query_instruction="Represent this query for retrieving relevant documents: "
-    )
+def load_policy_data():
+    embed_model = create_embeddings_model()
+    
+    with open(JSON_PATH, "r", encoding="utf-8") as f:
+        policy_data = json.load(f)
+        documents = parse_json_to_docs(policy_data)
+    
+    vectorstore = FAISS.from_documents(documents, embed_model)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
-@st.cache_resource
-def load_and_process_data(_embeddings):
-        with open(JSON_PATH, "r", encoding="utf-8") as f:
-            policy_data = json.load(f)
-
-        if "นโยบายสินเชื่อ_รวม" in policy_data:
-            documents = parse_json_to_docs(policy_data["นโยบายสินเชื่อ_รวม"])
-        else:
-            documents = parse_json_to_docs(policy_data)
-        return FAISS.from_documents(documents, _embeddings)
-
-@st.cache_resource
-def create_chain(_llm, _retriever):
     prompt_template = """
-    คุณคือผู้ช่วย AI ที่เชี่ยวชาญด้านนโยบายสินเชื่อ กรุณาตอบคำถามต่อไปนี้โดยใช้ข้อมูลที่ให้มาเท่านั้น:
+    คุณคือผู้ช่วย AI ที่เชี่ยวชาญด้านนโยบายสินเชื่อ กรุณาตอบคำถามต่อไปนี้โดยใช้ข้อมูลที่ให้มาเท่านั้น และเพิ่มบริบทที่เกี่ยวข้องเพื่อให้เข้าใจได้ง่ายขึ้น:
+
     ข้อมูลที่เกี่ยวข้อง (Context):
     {context}
 
@@ -377,90 +445,12 @@ def create_chain(_llm, _retriever):
 
     คำตอบ (เป็นภาษาไทย):
     """
+
+    llm = load_llm()
     prompt = ChatPromptTemplate.from_template(prompt_template)
-    document_chain = create_stuff_documents_chain(_llm, prompt)
-    return create_retrieval_chain(_retriever, document_chain)
+    document_chain = create_stuff_documents_chain(llm, prompt)
 
-def apply_custom_css():
-    st.markdown("""
-            <style>
-                    [data-testid="stSidebar"] {
-                    min-width: 450px !important;
-                    max-width: 450px !important;
-                    width: 450px !important;
-                    transition: width 0.3s;
-                }
-                [data-testid="stSidebarNav"] {
-                    display: none;
-                }
-                section[data-testid="stSidebarContent"] {
-                    width: 450px !important;
-                    padding-right: 1rem;
-                }
-                button[data-testid="baseButton-secondary"] {
-                    visibility: hidden;
-                }
-                .stButton button {
-                    height: 50px;
-                    font-size: 16px;
-                }
-                [data-testid="stMarkdownContainer"] h1 {
-                    font-size: 24px;
-                    padding: 10px 0;
-                    text-align: center;
-                }
-                .stSubheader {
-                    font-size: 18px;
-                    padding: 5px 0;
-                }
-                    
-                /* Existing styles... */
-                
-                /* Add smooth transition for sidebar */
-                [data-testid="stSidebar"] {
-                    transition: all 0.3s ease-in-out;
-                }
-
-                /* Hide sidebar when not shown */
-                [data-testid="stSidebar"][aria-expanded="false"] {
-                    margin-left: -450px;
-                }
-                
-                /* Style for delete button */
-                .stButton.delete-button button {
-                    background-color: transparent;
-                    color: #ff4b4b;
-                    border: none;
-                    padding: 0;
-                    height: 30px;
-                    width: 30px;
-                    border-radius: 50%;
-                }
-                .stButton.delete-button button:hover {
-                    background-color: #ffeded;
-                }
-                
-                /* Style for tab buttons */
-                div.st-cc {
-                    padding: 0.25rem;
-                }
-                div.stRadio > label {
-                    background-color: #f0f2f6;
-                    padding: 10px 15px;
-                    border-radius: 5px;
-                    margin-right: 10px;
-                    cursor: pointer;
-                    transition: background-color 0.3s;
-                }
-                div.stRadio > label:hover {
-                    background-color: #e0e2e6;
-                }
-                div.stRadio [data-testid="stMarkdownContainer"] p {
-                    font-size: 16px;
-                    font-weight: 500;
-                }
-            </style>
-        """, unsafe_allow_html=True)
+    return create_retrieval_chain(retriever, document_chain)
 
 def get_chat_preview(content, max_length=30):
     if not isinstance(content, str):
@@ -478,14 +468,14 @@ def manage_chat_history():
         with col1:
             if st.button("🗪 New Chat", type="primary", use_container_width=True):
                 st.session_state.messages = []
-                st.session_state.current_chat_id = f"chat_{int(time.time())}"
+                st.session_state.current_chat_id = f"chat_{int(time.time())}_{os.urandom(4).hex()}"
                 st.session_state.session_vector_store = None
                 st.rerun()
         with col2:
             if st.button("🗑️ Delete All", type="secondary", use_container_width=True):
                 if delete_chat_history():
                     st.session_state.messages = []
-                    st.session_state.current_chat_id = f"chat_{int(time.time())}"
+                    st.session_state.current_chat_id = f"chat_{int(time.time())}_{os.urandom(4).hex()}"
                     st.session_state.session_vector_store = None
                     st.rerun()
 
@@ -545,18 +535,86 @@ def manage_chat_history():
 
                         st.markdown("</div>", unsafe_allow_html=True)
 
-def main():
-    llm = load_llm()
-    embeddings = load_embeddings()
-    policy_vectorstore = load_and_process_data(embeddings)
-    policy_retriever = None
-    policy_chain = None
-    if policy_vectorstore:
-        policy_retriever = policy_vectorstore.as_retriever(search_kwargs={"k": 5})
-        policy_chain = create_chain(llm, policy_retriever)
+def typewriter_effect(message_placeholder, text):
+    for i in range(len(text)):
+        message_placeholder.markdown(text[:i+1])
+        time.sleep(0.015) 
 
+def extract_vehicle_info(response, car_data):
+    product_group = ""
+    gcode = ""
+
+    pg_patterns = [
+        r"PRODUCT GROUP[:\s]+([A-Z])",
+        r"กลุ่มผลิตภัณฑ์[:\s]+([A-Z])",
+        r"Product Group[:\s]+([A-Z])"
+    ]
+    
+    gcode_patterns = [
+        r"GCODE[:\s]+([A-Za-z0-9]+)",
+        r"ประเภทรถ[:\s]+([A-Za-z0-9]+)",
+        r"[Gg]code[:\s]+([A-Za-z0-9]+)"
+    ]
+    
+    for pattern in pg_patterns:
+        matches = re.search(pattern, response)
+        if matches:
+            product_group = matches.group(1)
+            break
+    
+    for pattern in gcode_patterns:
+        matches = re.search(pattern, response)
+        if matches:
+            gcode = matches.group(1)
+            break
+    
+    if not product_group or not gcode:
+        lines = response.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not product_group and ('PRODUCT GROUP' in line or 'กลุ่มผลิตภัณฑ์' in line):
+                parts = line.split(':')
+                if len(parts) > 1 and parts[1].strip():
+                    product_group = parts[1].strip()[0]
+            
+            if not gcode and ('GCODE' in line or 'ประเภทรถ' in line):
+                parts = line.split(':')
+                if len(parts) > 1 and parts[1].strip():
+                    gcode_parts = parts[1].strip().split()
+                    gcode = gcode_parts[0] if gcode_parts else ""
+    
+    if not product_group:
+        response_lower = response.lower()
+        if any(keyword in response_lower for keyword in ['มอเตอร์ไซค์', 'motorcycle', 'wave', 'click', 'scoopy']):
+            product_group = 'M'
+            gcode = gcode or 'MC'
+        elif any(keyword in response_lower for keyword in ['รถบรรทุก', 'truck', 'รถไถ', 'tractor']):
+            product_group = 'T'
+            gcode = gcode or 'FT' if 'รถไถ' in response_lower else 'T10'
+        elif any(keyword in response_lower for keyword in ['รถเก๋ง', 'รถยนต์', 'car', 'sedan']):
+            product_group = 'C'
+            gcode = gcode or 'CA'
+        elif any(keyword in response_lower for keyword in ['รถกระบะ', 'pickup']):
+            product_group = 'C'
+            gcode = 'P1' if 'ตอนเดียว' in response_lower else ('P2' if 'แคป' in response_lower else 'P4')
+
+    if not product_group and not car_data.empty and 'PRODUCT GROUP' in car_data.columns:
+        first_value = car_data['PRODUCT GROUP'].iloc[0]
+        if isinstance(first_value, str) and first_value:
+            product_group = first_value[0] if first_value else 'C'
+    
+    if not gcode and not car_data.empty and 'GCODE' in car_data.columns:
+        gcode = car_data['GCODE'].iloc[0] if not car_data.empty else 'CA'
+
+    product_group = product_group or 'C'
+    gcode = gcode or 'CA'
+    
+    return product_group, gcode
+
+def main():
     car_chain = build_car_rag_chain()
     car_data = load_car_data(EXCEL_FILE_PATH)
+    policy_chain = load_policy_data()
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -568,7 +626,7 @@ def main():
         st.session_state.chat_mode_selected = False
     
     manage_chat_history()
-    
+
     st.markdown(
         """
         <div style="text-align: center;">
@@ -578,10 +636,6 @@ def main():
         """,
         unsafe_allow_html=True
     )
-    
-    def change_mode():
-        st.session_state.chat_mode_selected = False
-        st.rerun()
     
     if not st.session_state.chat_mode_selected and not st.session_state.messages:
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>Select chat feature</h2>", unsafe_allow_html=True)
@@ -636,8 +690,15 @@ def main():
             
             with right_col:
                 if st.button("Change", key="change_mode_btn", use_container_width=True):
-                    change_mode()
+                    if st.session_state.chat_mode == "นโยบายสินเชื่อ":
+                        st.session_state.chat_mode = "ราคารถ"
+                    else:
+                        st.session_state.chat_mode = "นโยบายสินเชื่อ"
                     
+                    st.session_state.messages = []
+                    st.session_state.current_chat_id = f"chat_{int(time.time())}_{os.urandom(4).hex()}"
+                    st.rerun()
+
         chat_container = st.container()
         with chat_container:
             for message in st.session_state.messages:
@@ -651,85 +712,85 @@ def main():
                 with st.chat_message("user"):
                     st.markdown(user_input)
 
-            if st.session_state.chat_mode == "นโยบายสินเชื่อ":
-                if not policy_chain:
-                    error_msg = "ขออภัย ระบบยังไม่พร้อมทำงาน กรุณาตรวจสอบข้อผิดพลาดในการโหลดข้อมูล"
-                    with chat_container:
-                        with st.chat_message("assistant"):
-                            st.error(error_msg)
-                    save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
-                else:
-                    with chat_container:
-                        with st.chat_message("assistant"):
-                            message_placeholder = st.empty()
-                            message_placeholder.markdown("กำลังค้นหาคำตอบ...")
-                            
+
+        if st.session_state.chat_mode == "นโยบายสินเชื่อ" and user_input:
+            if not policy_chain:
+                error_msg = "ขออภัย ระบบยังไม่พร้อมทำงาน กรุณาตรวจสอบข้อผิดพลาดในการโหลดข้อมูล"
+                with chat_container:
+                    with st.chat_message("assistant"):
+                        st.error(error_msg)
+                save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            else:
+                with chat_container:
+                    with st.chat_message("assistant"):
+                        message_placeholder = st.empty()
+                        message_placeholder.markdown("กำลังค้นหาคำตอบ...")
+                        
+                        try:
+                            if not user_input.strip():
+                                message_placeholder.markdown("โปรดถามคำถามเกี่ยวกับนโยบายสินเชื่อ")
+                                return
+                                
                             response = policy_chain.invoke({"input": user_input})
                             answer = response.get("answer", "ขออภัย ไม่พบคำตอบสำหรับคำถามนี้")
+
                             sources = set()
                             for doc in response.get("context", []):
-                                source = doc.metadata.get("source")
-                                if source:
-                                    sources.add(source)
-                                
+                                if doc and hasattr(doc, 'metadata'):
+                                    source = doc.metadata.get("source")
+                                    if source:
+                                        sources.add(source)
+                            
                             source_text = "\n\n---\n**แหล่งข้อมูลที่เกี่ยวข้อง:**"
                             if sources:
                                 source_text += "\n" + "\n".join(f"- {source}" for source in sources)
                             else:
                                 source_text += "\n- ไม่พบแหล่งข้อมูลที่เฉพาะเจาะจง"
                                 
-                            full_response = append_static_url_sources(answer + source_text)
-                            message_placeholder.markdown(full_response)
+                            full_response = answer + source_text
+                            typewriter_effect(message_placeholder, full_response)
                             save_chat_to_history(st.session_state.current_chat_id, "assistant", full_response)
                             st.session_state.messages.append({"role": "assistant", "content": full_response})
+                            display_resource_cards()
+                        except Exception as e:
+                            error_msg = f"เกิดข้อผิดพลาดในการค้นหาคำตอบ: {str(e)}"
+                            message_placeholder.error(error_msg)
+                            save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
+                            st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
-            elif st.session_state.chat_mode == "ราคารถ":
-                if not car_chain or car_data.empty:
-                    error_msg = "ขออภัย ระบบยังไม่พร้อมทำงาน กรุณาตรวจสอบข้อผิดพลาดในการโหลดข้อมูลราคารถ"
-                    with chat_container:
-                        with st.chat_message("assistant"):
-                            st.error(error_msg)
-                    save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
-                else:
-                    with chat_container:
-                        with st.chat_message("assistant"):
-                            message_placeholder = st.empty()
-                            message_placeholder.markdown("กำลังค้นหาข้อมูลราคารถ...")
+        elif st.session_state.chat_mode == "ราคารถ":
+            if not car_chain or car_data.empty:
+                error_msg = "ขออภัย ระบบยังไม่พร้อมทำงาน กรุณาตรวจสอบข้อผิดพลาดในการโหลดข้อมูลราคารถ"
+                with chat_container:
+                    with st.chat_message("assistant"):
+                        st.error(error_msg)
+                save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
+                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+            elif user_input: 
+                with chat_container:
+                    with st.chat_message("assistant"):
+                        message_placeholder = st.empty()
+                        message_placeholder.markdown("กำลังค้นหาข้อมูลราคารถ...")
+                        
+                        try:
+                            if not user_input.strip():
+                                message_placeholder.markdown("โปรดถามคำถามเกี่ยวกับราคารถ")
+                                return
+                                
+                            response = car_chain.invoke(user_input)
+                            product_group, gcode = extract_vehicle_info(response, car_data)
+                            full_response = build_car_response(response, product_group, gcode)
+                            typewriter_effect(message_placeholder, full_response)
+                            save_chat_to_history(st.session_state.current_chat_id, "assistant", full_response)
+                            st.session_state.messages.append({"role": "assistant", "content": full_response})
+                            display_resource_cards()
                             
-                            try:
-                                response = car_chain.invoke(user_input)
-                                product_group = ""
-                                gcode = ""
-
-                                if "PRODUCT GROUP" in response:
-                                    matches = re.search(r"PRODUCT GROUP[:\s]+([A-Z])", response)
-                                    if matches:
-                                        product_group = matches.group(1)
-                                
-                                if "GCODE" in response:
-                                    matches = re.search(r"GCODE[:\s]+([A-Za-z0-9]+)", response)
-                                    if matches:
-                                        gcode = matches.group(1)
-                                
-                                if not product_group and not car_data.empty and 'PRODUCT GROUP' in car_data.columns:
-                                    first_value = car_data['PRODUCT GROUP'].iloc[0]
-                                    if isinstance(first_value, str) and first_value:
-                                        product_group = first_value[0] if len(first_value) > 0 else ''
-                                
-                                if not gcode and not car_data.empty and 'GCODE' in car_data.columns:
-                                    gcode = car_data['GCODE'].iloc[0] if not car_data.empty else ''
-                                    
-                                full_response = build_car_response(response, product_group, gcode)
-                                message_placeholder.markdown(full_response)
-                                save_chat_to_history(st.session_state.current_chat_id, "assistant", full_response)
-                                st.session_state.messages.append({"role": "assistant", "content": full_response})
-                            except Exception as e:
-                                error_msg = f"เกิดข้อผิดพลาดในการค้นหาข้อมูลราคารถ: {str(e)}"
-                                message_placeholder.error(error_msg)
-                                save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
-                                st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                        except Exception as e:
+                            error_msg = f"เกิดข้อผิดพลาดในการค้นหาข้อมูลราคารถ: {str(e)}"
+                            message_placeholder.error(error_msg)
+                            save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
+                            st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
 if __name__ == "__main__":
     main()
