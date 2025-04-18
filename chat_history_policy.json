@@ -1,29 +1,129 @@
 {
   "chats": {
-    "chat_1744511765": {
+    "chat_1744857220_358f06a4": {
       "messages": [
         {
           "role": "user",
-          "content": "ราคา Toyota Fortuner 3.0 เกียร์ออโต้ ปี 2008",
-          "timestamp": "2025-04-13 09:36:11.638138"
+          "content": "Can a 120-day overdue car loan be restructured? What are the conditions?",
+          "timestamp": "2025-04-17 09:44:15.922989"
         },
         {
           "role": "assistant",
-          "content": "\nราคา Toyota Fortuner 3.0 เกียร์ออโต้ ปี 2008 คือ 288,600 บาท โดยอยู่ในกลุ่มผลิตภัณฑ์ C (PRODUCT GROUP: C) และประเภทรถ CA (GCODE: CA)\n\nรายละเอียดของเพิ่มเติม :\n- ประเภทสัญญา (CONTNO_TYPE): C\n- รหัสและประเภทย่อย (GCODE): CA_รถเก๋ง (2-5 ประตู)\n- กลุ่มผลิตภัณฑ์: C-รถยนต์\n",
-          "timestamp": "2025-04-13 09:36:14.694275"
+          "content": "Yes, a 120-day overdue car loan can be restructured. The conditions for restructuring a car loan are as follows:\n\n1. The customer must have been overdue for more than 90 days.\n2. The customer must have paid more than one installment.\n3. The remaining principal amount can be used (there is an example of documents and calculation methods).\n4. Cash or 913 yield arrears can be collected (there is an example of documents and calculation methods).\n5. Cash, late fees, or 913 yield arrears can be collected (there is an example of documents and calculation methods).\n6. If the customer continues to be overdue, they will not receive any additional funds.\n\nIn this case, since the car loan is 120 days overdue, it meets the first condition for restructuring. However, the other conditions must also be met before restructuring can occur.\n\n---\n**Reference Source :**\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อที่ดิน.12_ปิดปรับ_ปรับโครงสร้างหนี้_สินเชื่อที่ดิน_HL.12_2_ปรับโครงสร้างหนี้_Restructure.เงื่อนไข\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.13_ปิดปรับ_ปรับโครงสร้างหนี้_CTVG.13_2_ปรับโครงสร้างหนี้_Restructure.เงื่อนไข\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.7_หลักประกัน.7_2_การถือครองสิทธิหลักประกัน_น้อยกว่า_90_วัน.เป้า_ก",
+          "timestamp": "2025-04-17 09:44:41.862821"
         },
         {
           "role": "user",
-          "content": " Honda City 1.5 เกียร์ออโต้ ปี 2020 ราคาเท่าไร",
-          "timestamp": "2025-04-13 09:37:42.534021"
+          "content": "Can a regional manager approve a 480,000 THB loan for an 18-year-old Toyota (Target E) with 160% LTV?",
+          "timestamp": "2025-04-17 09:44:51.219428"
         },
         {
           "role": "assistant",
-          "content": "\nHonda City 1.5 เกียร์ออโต้ ปี 2020 ราคาประเมินอยู่ที่ 313,300 บาท โดยเป็นรถประเภท CA ในกลุ่มผลิตภัณฑ์ C.\n\nรายละเอียดของเพิ่มเติม :\n- ประเภทสัญญา (CONTNO_TYPE): C\n- รหัสและประเภทย่อย (GCODE): CA_รถเก๋ง (2-5 ประตู)\n- กลุ่มผลิตภัณฑ์: C-รถยนต์\n",
-          "timestamp": "2025-04-13 09:37:44.802194"
+          "content": "Based on the provided information, the answer is no. According to the policy, the regional manager can approve a loan up to 1,500,000 THB for Target E in the case of restructuring debt or refinancing (top-up). However, the maximum loan amount for Target E without specifying any conditions is not mentioned.\n\nAdditionally, the LTV (Loan-to-Value) ratio is not explicitly stated in the given context. Therefore, we cannot confirm if a 160% LTV is acceptable under this policy. The information provided does not directly address the approval authority for new loans, especially concerning the age of the vehicle and LTV ratio.\n\n---\n**Reference Source :**\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.9_อำนาจ.9_1_วงเงินสินเชื่อ.เป้า_E\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.10_คุณสมบัติของผู้กู้และผู้ค้ำประกัน.10_6_เอกสารแสดงรายได้.เป้า_F_E_X_R.หมายเหตุเพิ่มเติม\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.13_ปิดปรับ_ปรับโครงสร้างหนี้_CTVG.13_3_อำนาจอนุมัติ.เขต_ภาค",
+          "timestamp": "2025-04-17 09:45:11.390458"
+        },
+        {
+          "role": "user",
+          "content": "For cars owned under 90 days, what checks or exceptions apply?",
+          "timestamp": "2025-04-17 09:45:57.912132"
+        },
+        {
+          "role": "assistant",
+          "content": "For cars owned under 90 days, the following checks and exceptions apply:\n\n1. A driver's license must be attached.\n2. If the ownership period is longer than 90 days, approval can be granted under specific conditions.\n\nExceptions include:\n\n1. The vehicle was transferred from a finance company (the original owner was a finance company, and the borrower is the current owner).\n2. The vehicle was transferred from a parent, child, spouse, or legal partner (with clear documentation of the relationship, such as a marriage certificate).\n\nAdditionally, for all vehicles, checks are performed on the following:\n\n1. The registration page to verify the vehicle's year, model, and ownership details.\n2. The tax payment history to ensure that taxes have been paid regularly.\n3. The records of any modifications, engine changes, or gas conversions made to the vehicle.\n\n---\n**Reference Source :**\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.8_ตรวจสอบ.8_1_การตรวจสอบหลักประกัน_กรมที่ดิน_DOL_ที่ดิน.เป้า_ก\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.7_หลักประกัน.7_2_การถือครองสิทธิหลักประกัน_น้อยกว่า_90_วัน\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.7_หลักประกัน.7_2_การถือครองสิทธิหลักประกัน_น้อยกว่า_90_วัน.เป้า_ก",
+          "timestamp": "2025-04-17 09:46:23.446590"
+        },
+        {
+          "role": "user",
+          "content": "For unregistered farm vehicles (e.g., Sakpattana), what documents prove ownership? Who can approve?",
+          "timestamp": "2025-04-17 09:46:24.558206"
+        },
+        {
+          "role": "assistant",
+          "content": "For unregistered farm vehicles, such as those from the Sakpattana brand, the following documents are required to prove ownership:\n\n1. A certificate of ownership.\n2. Sales documentation, including delivery receipts, invoices, payment confirmation letters, or factory sales confirmation documents.\n\nIn cases where the vehicle is purchased from another individual, the ownership documents will be in the name of the original owner (name changes are not permitted). Therefore, if a customer wishes to use this vehicle for a loan, they must provide a sales contract, identification card, household registration, and all previous sellers' documentation, along with a police station's daily logbook entry to confirm ownership.\n\nAs for approval, the specific authority or individual responsible for approving these documents is not mentioned in the provided context. However, it is essential to ensure that the documents are verified by a competent authority or the financial institution offering the loan to maintain compliance with their credit policies.\n\n---\n**Reference Source :**\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.7_หลักประกัน.7_4_รถที่ไม่มีทะเบียนรถ.เป้า_ก\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อที่ดิน.9_คุณสมบัติของผู้กู้และผู้ค้ำประกัน_สินเชื่อที่ดิน.9_6_เอกสารแสดงรายได้.จำนอง.ประเภท\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อที่ดิน.9_คุณสมบัติของผู้กู้และผู้ค้ำประกัน_สินเชื่อที่ดิน.9_5_ทะเบียนบ้าน_เอกสารยืนยันการเป็นคนในพื้นที่",
+          "timestamp": "2025-04-17 09:46:53.783006"
+        },
+        {
+          "role": "user",
+          "content": "For a 600,000 THB loan (Target X), what needs verification?",
+          "timestamp": "2025-04-17 09:47:42.137389"
+        },
+        {
+          "role": "assistant",
+          "content": "For a 600,000 THB loan (Target X), the verification requirements depend on whether there is documentation confirming local residency or income proof. If these documents are not available, a guarantor will be required according to clauses 9.5 and 9.6. Additionally, if the loan-to-value (LTV) ratio exceeds 120%, a guarantor is also necessary. If the application is made as a juristic person, an additional co-borrower, apart from the authorized managing director of that juristic person, must be included. However, \"พี่เหน่ง\" has the authority to waive these requirements.\n\n---\n**Reference Source :**\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.10_คุณสมบัติของผู้กู้และผู้ค้ำประกัน.10_6_เอกสารแสดงรายได้.เป้า_F_E_X_R.หมายเหตุเพิ่มเติม\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.10_คุณสมบัติของผู้กู้และผู้ค้ำประกัน.10_5_ทะเบียนบ้าน_เอกสารยืนยันการเป็นคนในพื้นที่\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.10_คุณสมบัติของผู้กู้และผู้ค้ำประกัน.10_7_คนค้ำประกัน",
+          "timestamp": "2025-04-17 09:48:02.309003"
+        },
+        {
+          "role": "user",
+          "content": "For a land loan with 35-day overdue, can a top-up be approved? By whom?",
+          "timestamp": "2025-04-17 09:49:14.449285"
+        },
+        {
+          "role": "assistant",
+          "content": "For a land loan with a 35-day overdue, according to the policy, if the customer is classified as \"เป้า ข\" (target B) and has been overdue for more than 30 days, they must first mortgage before any other actions can be taken. This implies that a top-up cannot be approved until the mortgage requirement is fulfilled.\n\nThe approval authority for a top-up in this case depends on the amount of the loan. If the loan amount does not exceed the original loan amount, the following authorities apply:\n\n- Branch: Up to 500,000 THB\n- District: Up to 700,000 THB\n- Region: Up to 1,000,000 THB\n\nOnce the mortgage condition is met, the top-up can then be considered for approval by the respective authority based on the loan amount.\n\n---\n**Reference Source :**\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อที่ดิน.12_ปิดปรับ_ปรับโครงสร้างหนี้_สินเชื่อที่ดิน_HL.12_1_ปิดปรับ_topup.เงื่อนไข\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อที่ดิน.12_ปิดปรับ_ปรับโครงสร้างหนี้_สินเชื่อที่ดิน_HL.12_3_อำนาจอนุมัติ_ปิดปรับ_Topup.จำนอง\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อที่ดิน.12_ปิดปรับ_ปรับโครงสร้างหนี้_สินเชื่อที่ดิน_HL.12_3_อำนาจอนุมัติ_ปิดปรับ_Topup.โอนลอย",
+          "timestamp": "2025-04-17 09:49:37.715555"
         }
       ],
-      "created_at": "2025-04-13 09:36:11.638138"
+      "created_at": "2025-04-17 09:44:15.922989"
+    },
+    "chat_1744871426_2a9c8340": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "Appraisal price for Toyota Fortuner, 2.8 automatic, year 2019",
+          "timestamp": "2025-04-17 13:38:58.161228"
+        },
+        {
+          "role": "assistant",
+          "content": "\nThe appraisal price for a Toyota Fortuner, 2.8 automatic, year 2019 is 620,100. The product group is C and the vehicle type is CA.\n\nAdditional details:\n- Contract type (CONTNO_TYPE): C\n- Code and subcategory (GCODE): CA_Sedan (2-5 doors)\n- Product group: C-Car\n",
+          "timestamp": "2025-04-17 13:39:05.194290"
+        },
+        {
+          "role": "user",
+          "content": "How much is the price of a Honda Scoopy I motorcycle, year 2022?",
+          "timestamp": "2025-04-17 13:39:13.458460"
+        },
+        {
+          "role": "assistant",
+          "content": "\nThe price of a Honda Scoopy I motorcycle, year 2022, is 45,500. PRODUCT GROUP: M, Vehicle Type: MC.\n\nAdditional details:\n- Contract type (CONTNO_TYPE): C\n- Code and subcategory (GCODE): CA_Sedan (2-5 doors)\n- Product group: M-Motorcycle\n",
+          "timestamp": "2025-04-17 13:39:18.963983"
+        },
+        {
+          "role": "user",
+          "content": "Price of a Ford 6600 (tractor), year 1995",
+          "timestamp": "2025-04-17 13:39:26.446013"
+        },
+        {
+          "role": "assistant",
+          "content": "\nThe price of a Ford 6600 (tractor) from the year 1995 is 260,000. The PRODUCT GROUP is T, and the GCODE is FT.\n\nAdditional details:\n- Contract type (CONTNO_TYPE): T\n- Code and subcategory (GCODE): T10_Truck (10 wheels)\n- Product group: T-Truck\n",
+          "timestamp": "2025-04-17 13:39:32.810193"
+        },
+        {
+          "role": "user",
+          "content": "For the Honda Accord automatic from year 2011 to 2015, what engine variants are available, and which model has the lowest appraisal price?",
+          "timestamp": "2025-04-17 13:39:38.476519"
+        },
+        {
+          "role": "assistant",
+          "content": "\nFor the Honda Accord automatic from year 2011 to 2015, the available engine variants are 2.0, 2.4, and 3.5. The model with the lowest appraisal price is the 2.0 เกียร์ออโต้ from 2011, with an appraisal price of 260,000. \n\nPRODUCT GROUP: C  \nGCODE: CA\n\nAdditional details:\n- Contract type (CONTNO_TYPE): C\n- Code and subcategory (GCODE): CA_Sedan (2-5 doors)\n- Product group: C-Car\n",
+          "timestamp": "2025-04-17 13:39:48.199267"
+        }
+      ],
+      "created_at": "2025-04-17 13:38:58.160228"
+    },
+    "chat_1744872463_f3329c36": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "Can a 120-day overdue car loan be restructured? What are the conditions?",
+          "timestamp": "2025-04-17 13:48:02.491908"
+        },
+        {
+          "role": "assistant",
+          "content": "Yes, a 120-day overdue car loan can be restructured under certain conditions. According to the policy on restructuring car loans (CTVG.13), the conditions for restructuring include:\n\n1. The customer must have been overdue for more than 90 days.\n2. At least one installment payment must have been collected.\n3. The remaining principal amount can be used for restructuring, as long as it does not exceed the current rate and no funds are transferred out.\n4. Any outstanding yield or 913 yield must be collected.\n5. Any outstanding penalties or follow-up costs must also be collected.\n6. If the customer remains overdue, they will not be eligible to receive any further payments.\n\nIn this case, since the car loan is 120 days overdue, it meets the first condition of being overdue for more than 90 days. Therefore, it can be considered for restructuring under the specified conditions.\n\n---\n**Reference Source :**\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อที่ดิน.12_ปิดปรับ_ปรับโครงสร้างหนี้_สินเชื่อที่ดิน_HL.12_2_ปรับโครงสร้างหนี้_Restructure.เงื่อนไข\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.13_ปิดปรับ_ปรับโครงสร้างหนี้_CTVG.13_2_ปรับโครงสร้างหนี้_Restructure.เงื่อนไข\n- นโยบายสินเชื่อ_รวม.นโยบายสินเชื่อรถยนต์_CTVG.7_หลักประกัน.7_2_การถือครองสิทธิหลักประกัน_น้อยกว่า_90_วัน.เป้า_ก",
+          "timestamp": "2025-04-17 13:48:29.269836"
+        }
+      ],
+      "created_at": "2025-04-17 13:48:02.491908"
     }
   }
 }
