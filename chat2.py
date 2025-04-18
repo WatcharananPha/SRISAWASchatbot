@@ -27,27 +27,27 @@ EXCEL_FILE_PATH = r'Data real\Car rate book.xlsx'
 VECTOR_STORE_PATH = "car_rate_vectorstore"
 
 CONTNO_TYPE_MAPPING = {
-    'T': {'BS': 'BS_รถบัส', 'FT': 'FT_รถไถ', 'HV': 'HV_เครื่องจักรกลหนัก', 
-          'OT': 'OT_รถอื่น ๆ', 'T10': 'T10_รถบรรทุก (10 ล้อ)', 
-          'T12': 'T12_รถบรรทุก[12ล้อ]', 'T6': 'T6_รถบรรทุก (6 ล้อ)'},
-    'A': {'N01': 'N01_สัญญาหลัก-รอง'},
-    'C': {'CA': 'CA_รถเก๋ง (2-5 ประตู)', 'P1': 'P1_รถกระบะ (ตอนเดียว)', 
-          'P2': 'P2_รถกระบะ (แคป)', 'P4': 'P4_รถกระบะ (4 ประตู)', 
-          'T4': 'T4_รถบรรทุก (4 ล้อ)', 'VA': 'VA_รถตู้'},
-    'G': {'G01': 'G01_รถไถโรตารี่', 'G03': 'G03_เครื่องยนต์เพื่อการเกษตร'},
-    'H': {'LA': 'LA_ที่ดินเปล่า', 'LH': 'LH_ที่ดินพร้อมสิ่งปลูกสร้าง'},
+    'T': {'BS': 'BS_Bus', 'FT': 'FT_Tractor', 'HV': 'HV_Heavy Machinery', 
+          'OT': 'OT_Other Vehicles', 'T10': 'T10_Truck (10 wheels)', 
+          'T12': 'T12_Truck [12 wheels]', 'T6': 'T6_Truck (6 wheels)'},
+    'A': {'N01': 'N01_Main-Sub Contract'},
+    'C': {'CA': 'CA_Sedan (2-5 doors)', 'P1': 'P1_Pickup Truck (Single Cab)', 
+          'P2': 'P2_Pickup Truck (Extended Cab)', 'P4': 'P4_Pickup Truck (4 doors)', 
+          'T4': 'T4_Truck (4 wheels)', 'VA': 'VA_Van'},
+    'G': {'G01': 'G01_Rotary Tiller', 'G03': 'G03_Agricultural Engine'},
+    'H': {'LA': 'LA_Vacant Land', 'LH': 'LH_Land with Buildings'},
     'I': {'IS': 'IS_Insurance'},
-    'L': {'LA': 'LA_ที่ดินเปล่า', 'LH': 'LH_ที่ดินพร้อมสิ่งปลูกสร้าง'},
-    'M': {'MC': 'MC_รถมอเตอร์ไซค์'},
-    'P': {'P04': 'P04_PLoan_สินเชื่อส่วนบุคคล (กลุ่มบริษัท)'},
-    'V': {'HR': 'HR_รถเกี่ยวข้าว'}
+    'L': {'LA': 'LA_Vacant Land', 'LH': 'LH_Land with Buildings'},
+    'M': {'MC': 'MC_Motorcycle'},
+    'P': {'P04': 'P04_PLoan_Personal Loan (Company Group)'},
+    'V': {'HR': 'HR_Rice Harvester'}
 }
 
 PRODUCT_GROUP_MAPPING = {
-    'A': 'NanoFinance', 'P': 'PLOAN', 'T': 'Truck รถบรรทุก',
-    'M': 'Motocycle มอเตอร์ไซต์', 'V': 'รถเกี่ยวข้าว',
-    'G': 'โคบูต้า รถไถเดินตาม', 'H': 'House บ้าน',
-    'L': 'Land ที่ดิน', 'I': 'ประกัน', 'C': 'รถยนต์'
+    'A': 'NanoFinance', 'P': 'PLOAN', 'T': 'Truck', 
+    'M': 'Motorcycle', 'V': 'Rice Harvester',
+    'G': 'Kubota Walking Tractor', 'H': 'House', 
+    'L': 'Land', 'I': 'Insurance', 'C': 'Car'
 }
 
 st.set_page_config(
@@ -140,9 +140,9 @@ def load_car_data(file_path):
 
 def format_car_row(row):
     columns_labels = {
-        'TYPECOD': 'ยี่ห้อ', 'MODELCOD': 'รุ่นหลัก', 'MODELDESC': 'รุ่นย่อย',
-        'MANUYR': 'ปีที่ผลิต', 'GEAR': 'เกียร์', 'GCODE': 'ประเภทรถ',
-        'PRODUCT GROUP': 'กลุ่มผลิตภัณฑ์', 'RATE': 'ราคาประเมิน'
+        'TYPECOD': 'Brand', 'MODELCOD': 'Main Model', 'MODELDESC': 'Sub Model',
+        'MANUYR': 'Year', 'GEAR': 'Transmission', 'GCODE': 'Vehicle Type',
+        'PRODUCT GROUP': 'Product Group', 'RATE': 'Appraisal Price'
     }
 
     parts = []
@@ -159,12 +159,12 @@ def format_car_row(row):
                      parts.append(f"{label}: {value}")
             else:
                 parts.append(f"{label}: {value}")
-    return ", ".join(parts) if parts else "ข้อมูลไม่เพียงพอ"
+    return ", ".join(parts) if parts else "Insufficient information"
 
 def get_classification_details(product_group, gcode):
-    product_group_desc = PRODUCT_GROUP_MAPPING.get(product_group, 'ไม่ระบุ')
-    gcode_desc = "ไม่ระบุ"
-    contno_type = "ไม่ระบุ"
+    product_group_desc = PRODUCT_GROUP_MAPPING.get(product_group, 'Not specified')
+    gcode_desc = "Not specified"
+    contno_type = "Not specified"
     
     for type_key, gcode_dict in CONTNO_TYPE_MAPPING.items():
         if gcode in gcode_dict:
@@ -184,10 +184,10 @@ def build_car_response(answer, product_group, gcode):
     return f"""
 {answer}
 
-รายละเอียดเพิ่มเติม :
-- ประเภทสัญญา (CONTNO_TYPE): {classification['CONTNO_TYPE']}
-- รหัสและประเภทย่อย (GCODE): {classification['GCODE_Description']}
-- กลุ่มผลิตภัณฑ์: {classification['Product_Group_Description']}
+Additional details:
+- Contract type (CONTNO_TYPE): {classification['CONTNO_TYPE']}
+- Code and subcategory (GCODE): {classification['GCODE_Description']}
+- Product group: {classification['Product_Group_Description']}
 """
 
 @st.cache_resource
@@ -245,20 +245,20 @@ def build_car_rag_chain():
     )
 
     template = """
-    คุณเป็นผู้ช่วย AI เชี่ยวชาญด้านข้อมูลราคารถ หน้าที่ของคุณคือตอบคำถามเกี่ยวกับราคารถโดยอ้างอิงจากข้อมูลที่ให้มาเท่านั้น
+        You are an AI assistant specialized in car pricing information. Your role is to answer questions about car prices based solely on the provided data.
 
-    ข้อมูลราคารถที่เกี่ยวข้อง:
-    {context}
+        Relevant car pricing information:
+        {context}
 
-    คำถามจากผู้ใช้: {question}
+        User question: {question}
 
-    คำตอบ: (ตอบเป็นภาษาไทย โดยสรุปข้อมูลจาก 'ข้อมูลราคารถที่เกี่ยวข้อง' ที่ตรงกับคำถามมากที่สุด 
-    พร้อมระบุข้อมูลเหล่านี้ทุกครั้ง: 
-    1. PRODUCT GROUP (ตัวอย่าง: PRODUCT GROUP: M สำหรับมอเตอร์ไซต์, C สำหรับรถยนต์, T สำหรับรถบรรทุกและรถไถ)
-    2. GCODE (ตัวอย่าง: GCODE: MC สำหรับมอเตอร์ไซต์, CA สำหรับรถเก๋ง, FT สำหรับรถไถ, P1/P2/P4 สำหรับรถกระบะ)
+        Answer: (Please respond in English by summarizing the 'Relevant car pricing information' that best matches the question.
+        Always include the following details:
+        1. PRODUCT GROUP (example: PRODUCT GROUP: M for motorcycles, C for cars, T for trucks and tractors)
+        2. GCODE (example: GCODE: MC for motorcycles, CA for sedans, FT for tractors, P1/P2/P4 for pickup trucks)
 
-    อย่าเพิ่มข้อมูลที่ไม่มีอยู่ในข้อมูลที่ให้มา หากไม่พบข้อมูลที่ตรงกัน ให้ตอบว่า "ไม่พบข้อมูลที่เกี่ยวข้อง")
-    """
+        Do not add information that is not present in the provided data. If no relevant information is found, respond with "No relevant information found.")
+        """
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
 
     def format_docs(docs):
@@ -275,11 +275,11 @@ def build_car_rag_chain():
 
 def format_value(value):
     if isinstance(value, list):
-        return "\n".join([f"- {item}" for item in value]) if value else "ไม่มีข้อมูล"
+        return "\n".join([f"- {item}" for item in value]) if value else "No data available"
     elif isinstance(value, dict):
-        return "\n".join([f"  {k}: {format_value(v)}" for k, v in value.items()]) if value else "ไม่มีข้อมูล"
+        return "\n".join([f"  {k}: {format_value(v)}" for k, v in value.items()]) if value else "No data available"
     else:
-        return str(value or "ไม่มีข้อมูล").replace("\\n", "\n")
+        return str(value or "No data available").replace("\\n", "\n")
 
 def parse_json_to_docs(data, parent_key="", docs=None):
     if docs is None:
@@ -295,25 +295,25 @@ def parse_json_to_docs(data, parent_key="", docs=None):
             if isinstance(value, (dict, list)) and key not in ["หัวข้อ", "หัวข้อย่อย"]:
                 parse_json_to_docs(value, f"{current_key}.", docs)
             elif key not in ["หัวข้อ", "หัวข้อย่อย"]:
-                readable_key = key.replace("_", " ").replace("เป้า ", "เป้าหมาย ")
+                readable_key = key.replace("_", " ").replace("เป้า ", "Target ")
                 content_parts.append(f"{readable_key}: {format_value(value)}")
 
         if content_parts:
-            page_content = f"หัวข้อ: {current_topic}\n" + "\n".join(content_parts)
+            page_content = f"Topic: {current_topic}\n" + "\n".join(content_parts)
             docs.append(Document(page_content=page_content.strip(), metadata=metadata))
 
     elif isinstance(data, list) and parent_key:
-        page_content = f"หัวข้อ: {parent_key.strip('.')}\n{format_value(data)}"
+        page_content = f"Topic: {parent_key.strip('.')}\n{format_value(data)}"
         metadata = {"source": parent_key.strip('.')}
         docs.append(Document(page_content=page_content.strip(), metadata=metadata))
 
     return docs
 
 def append_static_url_sources(answer: str) -> str:
-    return f"{answer}\n\n---\n**แหล่งข้อมูลเพิ่มเติม:**"
+    return f"{answer}\n\n---\n**Additional resources :**"
 
 def display_resource_cards():
-    if st.session_state.chat_mode == "ราคารถ":
+    if st.session_state.chat_mode == "Car Rate":
         st.markdown("""
             <div style="margin-top: 20px;">
                 <div style="display: flex; justify-content: center; gap: 20px;">
@@ -435,16 +435,16 @@ def load_policy_data():
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
     prompt_template = """
-    คุณคือผู้ช่วย AI ที่เชี่ยวชาญด้านนโยบายสินเชื่อ กรุณาตอบคำถามต่อไปนี้โดยใช้ข้อมูลที่ให้มาเท่านั้น และเพิ่มบริบทที่เกี่ยวข้องเพื่อให้เข้าใจได้ง่ายขึ้น:
+        You are an AI assistant specializing in credit policies. Please answer the following question using only the information provided, and add relevant context to enhance understanding:
 
-    ข้อมูลที่เกี่ยวข้อง (Context):     
-    {context}
+        Relevant Information (Context):     
+        {context}
 
-    คำถาม:
-    {input}
+        Question:
+        {input}
 
-    คำตอบ (เป็นภาษาไทย):
-    """
+        Answer (in English):
+        """
 
     llm = load_llm()
     prompt = ChatPromptTemplate.from_template(prompt_template)
@@ -621,7 +621,7 @@ def main():
     if "current_chat_id" not in st.session_state:
         st.session_state.current_chat_id = f"chat_{int(time.time())}_{os.urandom(4).hex()}"
     if "chat_mode" not in st.session_state:
-        st.session_state.chat_mode = "นโยบายสินเชื่อ"
+        st.session_state.chat_mode = "Credit Policy"
     if "chat_mode_selected" not in st.session_state:
         st.session_state.chat_mode_selected = False
     
@@ -652,7 +652,7 @@ def main():
                 </div>
             """, unsafe_allow_html=True)
             if st.button("Select Credit Policy", key="credit_policy_btn", use_container_width=True):
-                st.session_state.chat_mode = "นโยบายสินเชื่อ"
+                st.session_state.chat_mode = "Credit Policy"
                 st.session_state.chat_mode_selected = True
                 st.rerun()
         
@@ -666,12 +666,12 @@ def main():
                 </div>
             """, unsafe_allow_html=True)
             if st.button("Select Car Rate", key="car_rate_btn", use_container_width=True):
-                st.session_state.chat_mode = "ราคารถ"
+                st.session_state.chat_mode = "Car Rate"
                 st.session_state.chat_mode_selected = True
                 st.rerun()
     else:
-        current_mode_label = "Credit Policy - CTVGMHL" if st.session_state.chat_mode == "นโยบายสินเชื่อ" else "Car rate book"
-        current_icon = "📋" if st.session_state.chat_mode == "นโยบายสินเชื่อ" else "🚗"
+        current_mode_label = "Credit Policy - CTVGMHL" if st.session_state.chat_mode == "Credit Policy" else "Car rate book"
+        current_icon = "📋" if st.session_state.chat_mode == "Credit Policy" else "🚗"
 
         mode_container = st.container()
         with mode_container:
@@ -690,10 +690,10 @@ def main():
             
             with right_col:
                 if st.button("Change", key="change_mode_btn", use_container_width=True):
-                    if st.session_state.chat_mode == "นโยบายสินเชื่อ":
-                        st.session_state.chat_mode = "ราคารถ"
+                    if st.session_state.chat_mode == "Credit Policy":
+                        st.session_state.chat_mode = "Car Rate"
                     else:
-                        st.session_state.chat_mode = "นโยบายสินเชื่อ"
+                        st.session_state.chat_mode = "Credit Policy"
                     
                     st.session_state.messages = []
                     st.session_state.current_chat_id = f"chat_{int(time.time())}_{os.urandom(4).hex()}"
@@ -705,17 +705,16 @@ def main():
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
         
-        if user_input := st.chat_input(f"ถามคำถามเกี่ยวกับ{st.session_state.chat_mode}..."):
+        if user_input := st.chat_input(f"Ask a question about {st.session_state.chat_mode}..."):
             save_chat_to_history(st.session_state.current_chat_id, "user", user_input)
             st.session_state.messages.append({"role": "user", "content": user_input})
             with chat_container:
                 with st.chat_message("user"):
                     st.markdown(user_input)
 
-
-        if st.session_state.chat_mode == "นโยบายสินเชื่อ" and user_input:
+        if st.session_state.chat_mode == "Credit Policy" and user_input:
             if not policy_chain:
-                error_msg = "ขออภัย ระบบยังไม่พร้อมทำงาน กรุณาตรวจสอบข้อผิดพลาดในการโหลดข้อมูล"
+                error_msg = "Sorry, the system is not ready. Please check for errors in loading the data."
                 with chat_container:
                     with st.chat_message("assistant"):
                         st.error(error_msg)
@@ -725,15 +724,15 @@ def main():
                 with chat_container:
                     with st.chat_message("assistant"):
                         message_placeholder = st.empty()
-                        message_placeholder.markdown("กำลังค้นหาคำตอบ...")
+                        message_placeholder.markdown("Searching for an answer...")
                         
                         try:
                             if not user_input.strip():
-                                message_placeholder.markdown("โปรดถามคำถามเกี่ยวกับนโยบายสินเชื่อ")
+                                message_placeholder.markdown("Please ask a question about credit policy")
                                 return
                                 
                             response = policy_chain.invoke({"input": user_input})
-                            answer = response.get("answer", "ขออภัย ไม่พบคำตอบสำหรับคำถามนี้")
+                            answer = response.get("answer", "Sorry, no answer found for this question")
 
                             sources = set()
                             for doc in response.get("context", []):
@@ -742,11 +741,11 @@ def main():
                                     if source:
                                         sources.add(source)
                             
-                            source_text = "\n\n---\n**แหล่งข้อมูลที่เกี่ยวข้อง:**"
+                            source_text = "\n\n---\n**Reference Source :**"
                             if sources:
                                 source_text += "\n" + "\n".join(f"- {source}" for source in sources)
                             else:
-                                source_text += "\n- ไม่พบแหล่งข้อมูลที่เฉพาะเจาะจง"
+                                source_text += "\n- No specific sources found"
                                 
                             full_response = answer + source_text
                             typewriter_effect(message_placeholder, full_response)
@@ -754,14 +753,14 @@ def main():
                             st.session_state.messages.append({"role": "assistant", "content": full_response})
                             display_resource_cards()
                         except Exception as e:
-                            error_msg = f"เกิดข้อผิดพลาดในการค้นหาคำตอบ: {str(e)}"
+                            error_msg = f"Error occurred while searching for an answer: {str(e)}"
                             message_placeholder.error(error_msg)
                             save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
                             st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
-        elif st.session_state.chat_mode == "ราคารถ":
+        elif st.session_state.chat_mode == "Car Rate":
             if not car_chain or car_data.empty:
-                error_msg = "ขออภัย ระบบยังไม่พร้อมทำงาน กรุณาตรวจสอบข้อผิดพลาดในการโหลดข้อมูลราคารถ"
+                error_msg = "Sorry, the system is not ready. Please check for errors in loading car price data."
                 with chat_container:
                     with st.chat_message("assistant"):
                         st.error(error_msg)
@@ -771,11 +770,11 @@ def main():
                 with chat_container:
                     with st.chat_message("assistant"):
                         message_placeholder = st.empty()
-                        message_placeholder.markdown("กำลังค้นหาข้อมูลราคารถ...")
+                        message_placeholder.markdown("Searching for car price information...")
                         
                         try:
                             if not user_input.strip():
-                                message_placeholder.markdown("โปรดถามคำถามเกี่ยวกับราคารถ")
+                                message_placeholder.markdown("Please ask a question about car prices")
                                 return
                                 
                             response = car_chain.invoke(user_input)
@@ -788,7 +787,7 @@ def main():
                             display_resource_cards()
                             
                         except Exception as e:
-                            error_msg = f"เกิดข้อผิดพลาดในการค้นหาข้อมูลราคารถ: {str(e)}"
+                            error_msg = f"Error occurred while searching for car price information: {str(e)}"
                             message_placeholder.error(error_msg)
                             save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
                             st.session_state.messages.append({"role": "assistant", "content": error_msg})
