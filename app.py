@@ -3,6 +3,7 @@ import os
 import nest_asyncio
 import time
 import pandas as pd
+from typing import List
 
 import PyPDF2
 import io

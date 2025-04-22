@@ -99,6 +99,31 @@
         }
       ],
       "created_at": "2025-04-08 15:10:39.649516"
+    },
+    "chat_1745341402": {
+      "messages": [
+        {
+          "role": "user",
+          "content": "เอกสารที่ใช้เพื่อขอสินเชื่อ",
+          "timestamp": "2025-04-23 00:03:40.388295"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm sorry, I encountered an error while processing your question. Please try again with a different question.",
+          "timestamp": "2025-04-23 00:04:14.508057"
+        },
+        {
+          "role": "user",
+          "content": "เอกสารที่ใช้เพื่อขอสินเชื่อ\n\n",
+          "timestamp": "2025-04-23 00:05:36.953650"
+        },
+        {
+          "role": "assistant",
+          "content": "I'm sorry, I encountered an error while processing your question. Please try again with a different question.",
+          "timestamp": "2025-04-23 00:05:41.803041"
+        }
+      ],
+      "created_at": "2025-04-23 00:03:40.388158"
     }
   }
 }
