@@ -5,55 +5,27 @@ import time
 import pandas as pd
 import re 
 import nest_asyncio
-from typing import Tuple
 
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
-from langchain_openai import ChatOpenAI
+from langchain_openai import AzureChatOpenAI
 from langchain.prompts import ChatPromptTemplate, PromptTemplate
 from langchain.schema.document import Document
-from langchain.schema.runnable import RunnablePassthrough, RunnableLambda
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
+from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
-from langchain.retrievers import MultiVectorRetriever
-from langchain.storage import InMemoryStore
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.output_parsers import PydanticOutputParser
-from pydantic import BaseModel, Field
 
 nest_asyncio.apply()
 
-OPENAI_API_KEY = "sk-GqA4Uj6iZXaykbOzIlFGtmdJr6VqiX94NhhjPZaf81kylRzh"
-OPENAI_API_BASE = "https://api.opentyphoon.ai/v1"
-MODEL_NAME = "typhoon-v2-70b-instruct"
+os.environ["AZURE_OPENAI_API_KEY"] = 'd8e93330e8384f06aa1c8ace726af49e'
+os.environ["AZURE_OPENAI_ENDPOINT"] = 'https://dataiku-gpt4ommi.openai.azure.com/'
+
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
 JSON_PATH = "Jsonfile/M.JSON"
 CHAT_HISTORY_FILE = "chat_history_policy.json"
 EXCEL_FILE_PATH = r'Data real/Car rate book.xlsx'
 VECTOR_STORE_PATH = "car_rate_vectorstore"
-
-CONTNO_TYPE_MAPPING = {
-    'T': {'BS': 'BS_Bus', 'FT': 'FT_Tractor', 'HV': 'HV_Heavy Machinery', 
-          'OT': 'OT_Other Vehicles', 'T10': 'T10_Truck (10 wheels)', 
-          'T12': 'T12_Truck [12 wheels]', 'T6': 'T6_Truck (6 wheels)'},
-    'A': {'N01': 'N01_Main-Sub Contract'},
-    'C': {'CA': 'CA_Sedan (2-5 doors)', 'P1': 'P1_Pickup Truck (Single Cab)', 
-          'P2': 'P2_Pickup Truck (Extended Cab)', 'P4': 'P4_Pickup Truck (4 doors)', 
-          'T4': 'T4_Truck (4 wheels)', 'VA': 'VA_Van'},
-    'G': {'G01': 'G01_Rotary Tiller', 'G03': 'G03_Agricultural Engine'},
-    'H': {'LA': 'LA_Vacant Land', 'LH': 'LH_Land with Buildings'},
-    'I': {'IS': 'IS_Insurance'},
-    'L': {'LA': 'LA_Vacant Land', 'LH': 'LH_Land with Buildings'},
-    'M': {'MC': 'MC_Motorcycle'},
-    'P': {'P04': 'P04_PLoan_Personal Loan (Company Group)'},
-    'V': {'HR': 'HR_Rice Harvester'}
-}
-
-PRODUCT_GROUP_MAPPING = {
-    'A': 'NanoFinance', 'P': 'PLOAN', 'T': 'Truck', 
-    'M': 'Motorcycle', 'V': 'Rice Harvester',
-    'G': 'Kubota Walking Tractor', 'H': 'House', 
-    'L': 'Land', 'I': 'Insurance', 'C': 'Car'
-}
 
 st.set_page_config(
     page_title="Srisawad Chat",
@@ -129,7 +101,6 @@ def load_car_data(file_path):
     df = pd.read_excel(file_path, header=0, dtype=str).fillna('')
     df['MANUYR'] = pd.to_numeric(df['MANUYR'], errors='coerce').astype('Int64')
     df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').astype('Int64')
-    
     df['FDATEA'] = pd.to_datetime(df['FDATEA'], format='%d-%b-%y', errors='coerce')
     df['LDATEA'] = pd.to_datetime(df['LDATEA'], format='%d-%b-%y', errors='coerce')
     
@@ -147,126 +118,76 @@ def format_car_row(row):
         value = row.get(col)
         if pd.notna(value) and str(value).strip():
             if col in ['RATE', 'MANUYR']:
-                try:
-                    num_value = int(value)
-                    if num_value > 0:
-                        formatted_value = f"{num_value:,}" if col == 'RATE' else str(num_value)
-                        parts.append(f"{label}: {formatted_value}")
-                except (ValueError, TypeError):
-                     parts.append(f"{label}: {value}")
+                num_value = int(value)
+                if num_value > 0:
+                    formatted_value = f"{num_value:,}" if col == 'RATE' else str(num_value)
+                    parts.append(f"{label}: {formatted_value}")
             else:
                 parts.append(f"{label}: {value}")
     return ", ".join(parts) if parts else "Insufficient information"
 
-class QueryAnalysis(BaseModel):
-    data_source: str = Field(
-        description="The data source to query: 'Car Rate' for car pricing, 'Credit Policy' for loan/credit information, 'Hybrid' for both, or 'General' for general company info"
-    )
-    reformulated_question: str = Field(
-        description="A reformulated version of the question optimized for the selected data source(s)"
-    )
-    reasoning: str = Field(
-        description="The reasoning behind the choice of data source(s)"
-    )
-    car_specific_query: str = Field(
-        default="",
-        description="If hybrid mode, the car-specific part of the question"
-    )
-    policy_specific_query: str = Field(
-        default="",
-        description="If hybrid mode, the policy-specific part of the question"
-    )
-    language: str = Field(
-        description="The detected language of the query (e.g., 'Thai' or 'English')"
-    )
+def analyze_question_agent(user_input):
+    car_keywords = ["car", "vehicle", "price", "truck", "motorcycle", "brand", "model", 
+                   "รถยนต์", "รถเก๋ง", "รถกระบะ", "มอเตอร์ไซค์", "ราคา"]
+    
+    policy_keywords = ["loan", "credit", "policy", "interest", "requirement", "สินเชื่อ", 
+                      "เงินกู้", "ดอกเบี้ย", "หลักประกัน", "นโยบาย", "ctvgmhl"]
+    
+    car_count = sum(1 for word in car_keywords if word.lower() in user_input.lower())
+    policy_count = sum(1 for word in policy_keywords if word.lower() in user_input.lower())
 
-def analyze_question_agent(user_input: str) -> Tuple[str, str, str, str, str, str]:
-    llm = ChatOpenAI(
-        openai_api_key=OPENAI_API_KEY,
-        openai_api_base=OPENAI_API_BASE,
-        model_name=MODEL_NAME,
-        temperature=0.3,
-        max_tokens=4096,
+    if car_count > policy_count:
+        data_source = "Car Rate"
+        reasoning = f"Keyword matching: {car_count} car keywords vs {policy_count} policy keywords"
+        return data_source, user_input, reasoning
+
+    llm = AzureChatOpenAI(
+        openai_api_version="2024-12-01-preview",
+        azure_deployment="dataiku-ssci-gpt-4o", 
+        temperature=1.0, 
+        max_tokens=4096,  
     )
     
-    parser = PydanticOutputParser(pydantic_object=QueryAnalysis)
-    system_template = """
-    You are an AI agent specialized in analyzing customer queries about Srisawad Company services.
+    template = """
+    You are an AI agent responsible for analyzing user questions and determining whether they should be directed to 
+    the Car Rate book search or Credit Policy search. 
     
-    Your task is to analyze the user's question and determine which data source(s) should be used to answer:
+    User question: {question}
     
-    1. "Car Rate" - for questions about vehicle pricing, models, car loans, vehicle types
-    2. "Credit Policy" - for questions about loan requirements, interest rates, collateral, policy details
-    3. "Hybrid" - for questions that require BOTH car rate AND credit policy information
-    4. "General" - for general company information that doesn't fit the above
-    
-    IMPORTANT:
-    - For Hybrid questions, provide separate reformulated questions for each source
-    - Pay careful attention to the language: if the question is in Thai, respond in Thai; if in English, respond in English
-    - Analyze the question deeply - don't just look for keywords
-    
-    Examples of each type:
-    - Car Rate: "How much is a 2022 Toyota Camry worth?"
-    - Credit Policy: "What are the loan requirements for mortgages?"
-    - Hybrid: "What's the maximum loan I can get for a Honda City 2021 and what documents do I need?"
-    - General: "When was Srisawad Company founded?"
-    
-    Format your response according to the provided JSON schema.
+    Please output your answer in the format:
+    DATA_SOURCE: [Car Rate or Credit Policy]
+    REFORMULATED_QUESTION: [Reformulated question if needed, or the original question if clear]
+    REASONING: [Brief explanation of your decision]
+    LANGUAGE: [Thai or English - determine based on the language of the input question]
     """
     
-    human_template = """
-    Analyze this question: {question}
+    prompt = PromptTemplate(template=template, input_variables=["question"])
+    agent_chain = prompt | llm | StrOutputParser()
+    result = agent_chain.invoke({"question": user_input})
+    lines = result.strip().split('\n')
+    data_source = None
+    reformulated_question = user_input
+    reasoning = ""
     
-    {format_instructions}
-    """
-    
-    chat_prompt = ChatPromptTemplate.from_messages([
-        ("system", system_template),
-        ("human", human_template),
-    ])
-    
-    chain = chat_prompt | llm | parser
-    result = chain.invoke({
-        "question": user_input,
-        "format_instructions": parser.get_format_instructions(),
-    })
-    
-    data_source = result.data_source
-    reformulated_question = result.reformulated_question
-    reasoning = result.reasoning
-    car_query = result.car_specific_query
-    policy_query = result.policy_specific_query
-    language = result.language
-    
-    return data_source, reformulated_question, reasoning, car_query, policy_query, language
+    for line in lines:
+        if line.startswith('DATA_SOURCE:'):
+            data_source = line.replace('DATA_SOURCE:', '').strip()
+        elif line.startswith('REFORMULATED_QUESTION:'):
+            reformulated_question = line.replace('REFORMULATED_QUESTION:', '').strip()
+        elif line.startswith('REASONING:'):
+            reasoning = line.replace('REASONING:', '').strip()
 
-def get_classification_details(product_group, gcode):
-    product_group_desc = PRODUCT_GROUP_MAPPING.get(product_group, 'Not specified')
-    gcode_desc = "Not specified"
-    contno_type = "Not specified"
-    
-    for type_key, gcode_dict in CONTNO_TYPE_MAPPING.items():
-        if gcode in gcode_dict:
-            gcode_desc = gcode_dict[gcode]
-            contno_type = type_key
-            break
-            
-    return {
-        "CONTNO_TYPE": contno_type,
-        "GCODE_Description": gcode_desc,
-        "Product_Group_Description": f"{product_group}-{product_group_desc}"
-    }
+    if not data_source:
+        data_source = "Credit Policy" if policy_count >= car_count else "Car Rate"
 
-def build_car_response(answer, product_group, gcode):
-    classification = get_classification_details(product_group, gcode)
+    if any(keyword in user_input.lower() for keyword in car_keywords) and not data_source:
+        return "Car Rate", user_input, "Fallback: Basic keyword detection"
     
+    return data_source, reformulated_question, reasoning
+
+def build_car_response(answer, product_group=None, gcode=None):
     return f"""
 {answer}
-
-Additional details:
-- Contract type (CONTNO_TYPE): {classification['CONTNO_TYPE']}
-- Code and subcategory (GCODE): {classification['GCODE_Description']}
-- Product group: {classification['Product_Group_Description']}
 """
 
 @st.cache_resource
@@ -276,7 +197,7 @@ def create_embeddings_model():
             if text is None:
                 text = ""
             return super().embed_query(text)
-        
+            
     return SafeHuggingFaceBgeEmbeddings(
         model_name=EMBEDDING_MODEL_NAME,
         model_kwargs={'device': 'cpu'},
@@ -287,132 +208,129 @@ def create_embeddings_model():
 @st.cache_resource
 def create_car_vector_store():
     car_data = load_car_data(EXCEL_FILE_PATH)
-    if car_data.empty:
-        return None, None
-        
-    embed_model = create_embeddings_model()
-    if embed_model is None:
-        return None, None
-    
-    store = InMemoryStore()
-    id_key = "doc_id"
-    
     texts = [format_car_row(row) for _, row in car_data.iterrows()]
-    parent_docs = []
-    
-    for i, text in enumerate(texts):
-        metadata = {
-            "id": str(i),
-            "type": "car_data"
-        }
-
-        row = car_data.iloc[i]
-        if 'TYPECOD' in row and not pd.isna(row['TYPECOD']):
-            metadata["brand"] = row['TYPECOD']
-        if 'MODELCOD' in row and not pd.isna(row['MODELCOD']):
-            metadata["model"] = row['MODELCOD']
-        if 'MANUYR' in row and not pd.isna(row['MANUYR']):
-            metadata["year"] = str(row['MANUYR'])
-        if 'GCODE' in row and not pd.isna(row['GCODE']):
-            metadata["vehicle_type"] = row['GCODE']
-        if 'PRODUCT GROUP' in row and not pd.isna(row['PRODUCT GROUP']):
-            metadata["product_group"] = row['PRODUCT GROUP']
+    documents = [Document(page_content=text, metadata={"id": str(i)}) for i, text in enumerate(texts)]
+    embed_model = create_embeddings_model()    
+    vector_store = FAISS.from_documents(documents, embed_model)
+    vector_store.save_local(VECTOR_STORE_PATH)
         
-        doc = Document(page_content=text, metadata=metadata)
-        parent_docs.append((str(i), doc))
-    
-    vectorstore = FAISS.from_documents([doc for _, doc in parent_docs], embed_model)
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=128, chunk_overlap=64)
-    child_docs = []
-    for doc_id, doc in parent_docs:
-        child_docs.append((doc_id, doc))
-        chunks = text_splitter.split_text(doc.page_content)
-        for i, chunk in enumerate(chunks):
-            child = Document(
-                page_content=chunk,
-                metadata={
-                    **doc.metadata,
-                    "chunk_id": i,
-                    "parent_id": doc_id
-                }
-            )
-            child_docs.append((doc_id, child))
-        
-        metadata = doc.metadata
-        car_brand = metadata.get("brand", "")
-        car_model = metadata.get("model", "")
-        car_year = metadata.get("year", "")
-        
-        if car_brand and car_model:
-            summary = f"Information about {car_brand} {car_model} from year {car_year}"
-            child = Document(
-                page_content=summary,
-                metadata={
-                    **doc.metadata,
-                    "summary_type": "brand_model",
-                    "parent_id": doc_id
-                }
-            )
-            child_docs.append((doc_id, child))
-            
-    for doc_id, doc in child_docs:
-        store.mset([(doc_id, doc)])
-    
-    retriever = MultiVectorRetriever(
-        vectorstore=vectorstore,
-        docstore=store,
-        id_key=id_key,
-        search_kwargs={"k": 5},
-    )
-    
-    return retriever, embed_model
+    return vector_store, embed_model
 
 @st.cache_resource
 def build_car_rag_chain():
-    retriever, _ = create_car_vector_store()
-    if retriever is None:
-        return None
+    vector_store, _ = create_car_vector_store()
+    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
     
-    llm = ChatOpenAI(
-        openai_api_key=OPENAI_API_KEY,
-        openai_api_base=OPENAI_API_BASE,
-        model_name=MODEL_NAME,
-        temperature=0.5,
-        max_tokens=4096,
+    llm = AzureChatOpenAI(
+        openai_api_version="2024-12-01-preview",
+        azure_deployment="dataiku-ssci-gpt-4o",
+        temperature=1.0,
+        max_tokens=4096, 
     )
 
     template = """
-        You are an AI assistant specialized in car pricing information. Answer questions about car prices based on the provided data.
+    คุณคือ AI ผู้ช่วยเชี่ยวชาญด้านข้อมูลราคารถยนต์ของศรีสวัสดิ์ (Srisawad's car pricing information) หน้าที่ของคุณคือตอบคำถามเกี่ยวกับราคารถยนต์โดยใช้ข้อมูลที่ให้ไว้ใน 'Relevant car pricing information (Context)' เท่านั้น โดยอ้างอิง **โครงสร้างข้อมูลและ Mapping ที่ให้ไว้ด้านล่างนี้** เพื่อทำความเข้าใจข้อมูลใน Context และต้องตอบในรูปแบบที่กำหนดด้านล่างนี้อย่างเคร่งครัด
 
-        Relevant car pricing information:
-        {context}
+    **โครงสร้างข้อมูลและ Mapping (Data Schema and Mappings):**
 
-        User question: {question}
+    *   **ความหมายคอลัมน์หลัก (Key Column Meanings):**
+        *   `TYPECOD`: ยี่ห้อหลักประกัน (Brand)
+        *   `MODELCOD`: รุ่นหลักประกัน (Main Model)
+        *   `MODELDESC`: รายละเอียดรุ่นหลักประกัน (Sub Model/Description)
+        *   `MANUYR`: ปีผลิต (Manufacturing Year)
+        *   `RATE`: ราคาประเมิน (Appraisal Price) - **นี่คือราคาที่ต้องดึงมาแสดง**
+        *   `GCODE`: ประเภทย่อยของหลักทรัพย์ (Sub-category Code) - **นี่คือรหัสที่ต้องดึงมาแสดงและหาคำอธิบาย**
+        *   `PRODUCT GROUP`: ประเภทหลักของหลักประกัน (Main Category Code) - **นี่คือรหัสที่ต้องดึงมาแสดงและหาคำอธิบาย**
+        *   `GEAR`: ระบบขับเคลื่อน (Transmission: Auto, Manual)
+        *   `FDATEA`: วันที่เริ่มใช้ราคา
+        *   `LDATEA`: วันสุดท้ายที่ใช้ราคา
 
-        Instructions for answering:
-        1. If the question is in Thai, please respond in Thai.
-        2. If the question is in English, please respond in English.
-        3. Always include PRODUCT GROUP and GCODE if available in your response.
-        4. If no relevant information is found, respond with "No relevant information found" in English or "ไม่พบข้อมูลที่เกี่ยวข้อง" in Thai.
-        5. Summarize the relevant car pricing information in the same language as the question.
-        6. Be sure to include specific details from the retrieved documents.
+    *   **Mapping สำหรับ GCODE (ประเภทย่อย):**
+        *   `CA`: รถเก๋ง (2-5 ประตู)
+        *   `P4`: รถกระบะ (4 ประตู)
+        *   `P2`: รถกระบะ (แคป)
+        *   `P1`: รถกระบะ (ตอนเดียว)
+        *   `MC`: รถมอเตอร์ไซค์
+        *   `FT`: รถไถ
+        *   `T4`: รถบรรทุก (4 ล้อ)
+        *   `T6`: รถบรรทุก (6 ล้อ)
+        *   `T10`: รถบรรทุก (10 ล้อ)
+        *   `T12`: รถบรรทุก (12 ล้อ)
+        *   `VA`: รถตู้
+        *   `BS`: รถบัส
+        *   `HV`: เครื่องจักรกลหนัก
+        *   `OT`: รถอื่นๆ
+        *   `N01`: สัญญาหลัก-รอง
+        *   `G01`: รถไถโรตารี่
+        *   `G03`: เครื่องยนต์เพื่อการเกษตร
+        *   `LA`: ที่ดินเปล่า
+        *   `LH`: ที่ดินพร้อมสิ่งปลูกสร้าง
+        *   `IS`: ประกัน
+        *   `P04`: สินเชื่อส่วนบุคคล (กลุ่มบริษัท)
+        *   `HR`: รถเกี่ยวข้าว
 
-        Answer:
+    *   **Mapping สำหรับ PRODUCT GROUP (ประเภทหลัก):**
+        *   `A`: NanoFinance
+        *   `P`: PLOAN
+        *   `T`: Truck (รถบรรทุก)
+        *   `M`: Motocycle (มอเตอร์ไซค์)
+        *   `V`: รถเกี่ยวข้าว
+        *   `G`: Kubota (รถไถเดินตาม/เกษตร)
+        *   `H`: House (บ้าน)
+        *   `L`: Land (ที่ดิน)
+        *   `I`: Insurance (ประกัน)
+        *   `C`: Car (รถยนต์ - เก๋ง, กระบะ, ตู้)
+
+    ---
+
+    **Relevant car pricing information (Context):**
+    {context}
+
+    **User question:**
+    {question}
+
+    ---
+
+    **คำแนะนำสำหรับการตอบ (Instructions):**
+
+    1.  **ใช้ข้อมูลจาก Context เท่านั้น:** ห้ามใช้ความรู้ภายนอกเด็ดขาด
+    2.  **ค้นหาข้อมูลโดยใช้ Schema:** จาก Context ที่ให้มา ให้ค้นหารายละเอียดของรถยนต์ที่ตรงกับคำถามของผู้ใช้ (`{question}`) โดยใช้ **โครงสร้างข้อมูลและ Mapping ด้านบน** ช่วยในการระบุและดึงข้อมูลจากคอลัมน์ต่อไปนี้:
+        *   ชื่อรุ่นรถ (พยายามรวม `TYPECOD`, `MODELCOD`, `MODELDESC`, `MANUYR` ถ้ามีใน Context)
+        *   ราคาประเมิน (จากคอลัมน์ `RATE`)
+        *   **รหัส**ประเภทย่อย (จากคอลัมน์ `GCODE`)
+        *   **รหัส**กลุ่มผลิตภัณฑ์หลัก (จากคอลัมน์ `PRODUCT GROUP`)
+    3.  **รูปแบบการตอบ (Output Format):** ตอบในรูปแบบนี้ *เท่านั้น*:
+
+        ```
+        ราคาของ [ชื่อรุ่นรถที่พบใน Context] ราคา [ราคาประเมิน(RATE)ที่พบใน Context] บาท
+        ประเภทย่อยของหลักประกัน (GCODE) : [GCODE ที่พบใน Context] ([คำอธิบาย GCODE จาก Mapping ด้านบน])
+        ประเภทหลักของหลักประกัน (PRODUCT GROUP) : [PRODUCT GROUP ที่พบใน Context] ([คำอธิบาย PRODUCT GROUP จาก Mapping ด้านบน])
+        ```
+
+        *   แทนที่ `[ชื่อรุ่นรถที่พบใน Context]` และ `[ราคาประเมิน(RATE)ที่พบใน Context]` ด้วยข้อมูลที่หาเจอจริงๆ จาก `{context}`.
+        *   สำหรับ `[GCODE ที่พบใน Context]` และ `[PRODUCT GROUP ที่พบใน Context]`: ใส่ **รหัส** ที่ดึงมาจาก `{context}`.
+        *   สำหรับ `([คำอธิบาย...จาก Mapping ด้านบน])`: **หลังจาก** ได้รหัส `GCODE` และ `PRODUCT GROUP` จาก `{context}` แล้ว ให้ **ค้นหาคำอธิบายที่ตรงกัน** จากส่วน **"Mapping สำหรับ GCODE"** และ **"Mapping สำหรับ PRODUCT GROUP"** ที่ให้ไว้ *ในพรอมต์นี้* แล้วนำมาใส่ในวงเล็บต่อท้ายรหัส.
+        *   **สำคัญ:** หากไม่พบ *รหัส* (`GCODE` หรือ `PRODUCT GROUP`) ใน Context สำหรับรถรุ่นนั้น ให้ใส่คำว่า "ไม่มีข้อมูล" สำหรับทั้งรหัสและคำอธิบาย (เช่น `GCODE : ไม่มีข้อมูล`). หากพบ *รหัส* แต่ *ไม่พบคำอธิบาย* ที่ตรงกันใน Mapping ของพรอมต์นี้ (ซึ่งไม่ควรเกิดขึ้นถ้า Mapping ครบ) ให้ใส่เฉพาะรหัสและวงเล็บว่าง `()` หรือระบุว่า `(ไม่มีคำอธิบายใน Mapping)`.
+        *   ตรวจสอบให้แน่ใจว่าดึงค่าตัวเลขราคามาใส่ให้ถูกต้อง และใส่หน่วย "บาท" ต่อท้าย (ถ้าเป็นตัวเลข)
+
+    4.  **ภาษา (Language):**
+        *   ถ้าคำถาม `{question}` เป็นภาษาไทย ให้ตอบโดยใช้รูปแบบและข้อความภาษาไทยตามข้อ 3 ทั้งหมด
+        *   ถ้าคำถาม `{question}` เป็นภาษาอังกฤษ ให้ปรับรูปแบบเป็นภาษาอังกฤษ และใช้คำอธิบายภาษาอังกฤษจาก Mapping (ถ้ามี) หรือใส่เฉพาะ Code หากไม่มีคำอธิบายภาษาอังกฤษใน Mapping เช่น:
+            ```
+            Price of [Car Model Found in Context]: [RATE Found in Context] Baht
+            Sub-category of collateral (GCODE): [GCODE Found in Context] ([GCODE Description from Mapping])
+            Main category of collateral (PRODUCT GROUP): [PRODUCT GROUP Found in Context] ([PRODUCT GROUP Description from Mapping])
+            ```
+            (หากไม่พบข้อมูล ให้ใช้ "Not specified" หรือ "N/A". หากไม่มี Description ให้ใส่ Code อย่างเดียว หรือ Code กับ `()`)
+
+    5.  **กรณีไม่พบข้อมูลเลย:** หากไม่พบข้อมูลใดๆ ใน `{context}` ที่เกี่ยวข้องกับรถยนต์ที่ถามเลย ให้ตอบเพียงแค่: "ไม่พบข้อมูลที่เกี่ยวข้อง" (สำหรับคำถามภาษาไทย) หรือ "No relevant information found" (สำหรับคำถามภาษาอังกฤษ) **ห้าม**ใช้รูปแบบในข้อ 3
+
+    **Answer:**
     """
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
 
     def format_docs(docs):
-        unique_docs = {}
-        for doc in docs:
-            doc_id = doc.metadata.get("id", "")
-            if doc_id not in unique_docs or ("chunk_id" not in doc.metadata and "chunk_id" in unique_docs[doc_id].metadata):
-                unique_docs[doc_id] = doc
-        
-        formatted_texts = []
-        for doc_id, doc in unique_docs.items():
-            formatted_texts.append(doc.page_content)
-            
-        return "\n\n".join(formatted_texts)
+        return "\n\n".join(doc.page_content for doc in docs)
 
     rag_chain = (
         {"context": retriever | format_docs, "question": RunnablePassthrough()}
@@ -422,6 +340,9 @@ def build_car_rag_chain():
     )
 
     return rag_chain
+
+def normal_response(message_placeholder, text):
+    message_placeholder.markdown(text)
 
 def format_value(value):
     if isinstance(value, list):
@@ -434,12 +355,11 @@ def format_value(value):
 def parse_json_to_docs(data, parent_key="", docs=None):
     if docs is None:
         docs = []
-        
+
     if isinstance(data, dict):
         current_topic = data.get("หัวข้อ", data.get("หัวข้อย่อย", parent_key.strip('.')))
         content_parts = []
-        doc_id = f"policy_{len(docs) if docs else 0}"
-        metadata = {"source": parent_key.strip('.'), "doc_id": doc_id}
+        metadata = {"source": parent_key.strip('.')}
 
         for key, value in data.items():
             current_key = f"{parent_key}{key}" if parent_key else key
@@ -454,197 +374,11 @@ def parse_json_to_docs(data, parent_key="", docs=None):
             docs.append(Document(page_content=page_content.strip(), metadata=metadata))
 
     elif isinstance(data, list) and parent_key:
-        doc_id = f"policy_{len(docs) if docs else 0}"
         page_content = f"Topic: {parent_key.strip('.')}\n{format_value(data)}"
-        metadata = {"source": parent_key.strip('.'), "doc_id": doc_id}
+        metadata = {"source": parent_key.strip('.')}
         docs.append(Document(page_content=page_content.strip(), metadata=metadata))
 
     return docs
-
-@st.cache_resource
-def load_policy_data():
-    embed_model = create_embeddings_model()
-    if embed_model is None:
-        return (None, None)
-        
-    if not os.path.exists(JSON_PATH):
-        return (None, None)
-        
-    with open(JSON_PATH, "r", encoding="utf-8") as f:
-        policy_data = json.load(f)
-    
-    parent_documents = parse_json_to_docs(policy_data, docs=[])
-    if not parent_documents:
-        return (None, None)
-    
-    store = InMemoryStore()
-    id_key = "doc_id"
-    parent_docs_with_ids = [(doc.metadata["doc_id"], doc) for doc in parent_documents]
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=50)
-    child_docs = []
-    
-    for doc_id, doc in parent_docs_with_ids:
-        child_docs.append((doc_id, doc))
-        chunks = text_splitter.split_text(doc.page_content)
-        for i, chunk in enumerate(chunks):
-            child = Document(
-                page_content=chunk,
-                metadata={
-                    **doc.metadata,
-                    "chunk_id": i,
-                    "parent_id": doc_id
-                }
-            )
-            child_docs.append((doc_id, child))
-        
-        source = doc.metadata.get("source", "")
-        if "Topic:" in doc.page_content:
-            topic = doc.page_content.split("Topic:", 1)[1].split("\n", 1)[0].strip()
-            summary = f"Information about {topic} in credit policy"
-            child = Document(
-                page_content=summary,
-                metadata={
-                    **doc.metadata,
-                    "summary_type": "topic",
-                    "parent_id": doc_id
-                }
-            )
-            child_docs.append((doc_id, child))
-    
-    for doc_id, doc in child_docs:
-        store.mset([(doc_id, doc)])
-    
-    child_documents = [doc for _, doc in child_docs]
-    vectorstore = FAISS.from_documents(child_documents, embed_model)
-
-    retriever = MultiVectorRetriever(
-        vectorstore=vectorstore,
-        docstore=store,
-        id_key=id_key,
-        search_kwargs={"k": 5},
-    )
-    
-    llm = ChatOpenAI(
-        openai_api_key=OPENAI_API_KEY,
-        openai_api_base=OPENAI_API_BASE,
-        model_name=MODEL_NAME,
-        temperature=0.5,
-        max_tokens=4096,
-    )
-    
-    prompt_template = """
-        You are an AI assistant specializing in credit policies. 
-        If you are asked in Thai, respond in Thai. If asked in English, respond in English.
-        Please answer the following question using only the information provided:
-
-        Relevant Information (Context):     
-        {context}
-
-        Question:
-        {input}
-
-        Answer (be concise and specific):
-    """
-    
-    def format_docs(docs):
-        unique_docs = {}
-        for doc in docs:
-            doc_id = doc.metadata.get("parent_id", doc.metadata.get("doc_id", ""))
-            if doc_id not in unique_docs or ("chunk_id" not in doc.metadata and "chunk_id" in unique_docs[doc_id].metadata):
-                unique_docs[doc_id] = doc
-                
-        formatted_texts = []
-        for doc_id, doc in unique_docs.items():
-            formatted_texts.append(doc.page_content)
-            
-        return "\n\n".join(formatted_texts)
-        
-    prompt = ChatPromptTemplate.from_template(prompt_template)
-    
-    chain = (
-        {"context": retriever | format_docs, "input": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-    
-    return chain, retriever
-
-def create_hybrid_agent(car_retriever, policy_retriever):
-    if not car_retriever or not policy_retriever:
-        return None
-        
-    llm = ChatOpenAI(
-        openai_api_key=OPENAI_API_KEY,
-        openai_api_base=OPENAI_API_BASE,
-        model_name=MODEL_NAME,
-        temperature=0.5,
-        max_tokens=4096,
-    )
-    
-    def get_relevant_documents(query_dict):
-        car_query = query_dict.get("car_query", "")
-        policy_query = query_dict.get("policy_query", "")
-        original_query = query_dict.get("original_query", "")
-        language = query_dict.get("language", "English")
-        
-        car_docs = []
-        if car_query:
-            car_docs = car_retriever.get_relevant_documents(car_query)
-            
-        policy_docs = []
-        if policy_query:
-            policy_docs = policy_retriever.get_relevant_documents(policy_query)
-        
-        car_text = "\n\n".join([doc.page_content for doc in car_docs[:3]])
-        policy_text = "\n\n".join([doc.page_content for doc in policy_docs[:3]])
-        car_section = f"CAR PRICING INFORMATION:\n{car_text}" if car_text else "No car pricing information found."
-        policy_section = f"\nCREDIT POLICY INFORMATION:\n{policy_text}" if policy_text else "No credit policy information found."
-        
-        combined_text = f"{car_section}\n\n{policy_section}"
-        
-        return {
-            "combined_context": combined_text,
-            "original_query": original_query,
-            "language": language
-        }
-    
-    template = """
-    You are an AI assistant for Srisawad Company that specializes in both car pricing and credit policies.
-    
-    Answer the user's question by using BOTH the car pricing information AND the credit policy information provided.
-    
-    Use the following format:
-    1. First, provide information about the car (if available)
-    2. Next, provide information about the related credit/loan policies (if available)
-    3. Finally, combine both pieces of information to give a complete answer
-    
-    {combined_context}
-    
-    User question: {original_query}
-    
-    Important instructions:
-    - If the question is in Thai, respond in Thai. If in English, respond in English.
-    - Include specific details from both the car information and policy information.
-    - Make connections between the car details and the loan policies when possible.
-    - If information is missing from either source, clearly state what is missing.
-    
-    Complete Answer:
-    """
-    
-    prompt = PromptTemplate(template=template, input_variables=["combined_context", "original_query"])
-    chain = (
-        RunnableLambda(get_relevant_documents) 
-        | {
-            "combined_context": lambda x: x["combined_context"],
-            "original_query": lambda x: x["original_query"],
-        }
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-    
-    return chain
 
 def display_resource_cards():
     if st.session_state.detected_mode == "Car Rate":
@@ -662,33 +396,10 @@ def display_resource_cards():
                 </div>
             </div>
         """, unsafe_allow_html=True)
-    elif st.session_state.detected_mode == "Credit Policy":
+    else:
         st.markdown("""
             <div style="margin-top: 20px;">
                 <div style="display: flex; justify-content: center; gap: 20px;">
-                    <a href="https://docs.google.com/spreadsheets/d/10Ol2r3_ZTkSf9KSGCjLjs9J4RepArO3tepwhErKyptI/edit?usp=sharing" target="_blank" style="text-decoration: none; color: inherit;">
-                        <div style="text-align: center; width: 150px;">
-                            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; height: 150px;">
-                                <img src="https://cdn-icons-png.flaticon.com/512/888/888850.png" width="64" height="64">
-                                <p style="margin-top: 10px; font-weight: 500; font-size: 14px;">Credit Policy - CTVGMHL</p>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-    elif st.session_state.detected_mode == "Hybrid":
-        st.markdown("""
-            <div style="margin-top: 20px;">
-                <div style="display: flex; justify-content: center; gap: 20px;">
-                    <a href="https://docs.google.com/spreadsheets/d/1Zxf-8sMZOwo36IWoSPXnyhRN02BFXPVGeLYz5h6t_1s/edit?usp=sharing" target="_blank" style="text-decoration: none; color: inherit;">
-                        <div style="text-align: center; width: 150px;">
-                            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; height: 150px;">
-                                <img src="https://cdn-icons-png.flaticon.com/512/888/888850.png" width="64" height="64">
-                                <p style="margin-top: 10px; font-weight: 500; font-size: 14px;">Car rate book</p>
-                            </div>
-                        </div>
-                    </a>
                     <a href="https://docs.google.com/spreadsheets/d/10Ol2r3_ZTkSf9KSGCjLjs9J4RepArO3tepwhErKyptI/edit?usp=sharing" target="_blank" style="text-decoration: none; color: inherit;">
                         <div style="text-align: center; width: 150px;">
                             <div style="background-color: #f8f9fa; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; height: 150px;">
@@ -760,13 +471,52 @@ def delete_single_chat(chat_id):
 
 @st.cache_resource
 def load_llm():
-    return ChatOpenAI(
-        openai_api_key=OPENAI_API_KEY,
-        openai_api_base=OPENAI_API_BASE,
-        model_name=MODEL_NAME,
-        temperature=0.5,
+    return AzureChatOpenAI(
+        openai_api_version="2024-12-01-preview",
+        azure_deployment="dataiku-ssci-gpt-4o",
+        temperature=1.0,
         max_tokens=4096,
     )
+
+@st.cache_resource
+def load_policy_data():
+    embed_model = create_embeddings_model()
+    with open(JSON_PATH, "r", encoding="utf-8") as f:
+        policy_data = json.load(f)
+        documents = parse_json_to_docs(policy_data)
+        vectorstore = FAISS.from_documents(documents, embed_model)
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+
+        prompt_template = """
+        คุณคือผู้เชี่ยวชาญ AI ด้านนโยบายสินเชื่อของศรีสวัสดิ์ (Srisawad's credit policies) โดยเฉพาะอย่างยิ่งข้อมูลที่ให้ไว้ด้านล่างนี้
+        หน้าที่ของคุณคือตอบคำถามโดยอ้างอิงจากข้อมูลที่ให้ไว้ในส่วน 'Relevant Information (Context)' เท่านั้น
+        ข้อมูลใน Context ประกอบด้วยรายละเอียดเงื่อนไขสำหรับสินเชื่อประเภทต่างๆ หรือ "เป้า" ที่แตกต่างกัน (เช่น เป้า M, เป้า ก, เป้า F, เป้า H, เป้า L) รวมถึงเงื่อนไขย่อย, เอกสารที่ต้องการ, ข้อห้าม, และอำนาจในการอนุมัติหรือยกเว้น
+
+        หากผู้ใช้ถามเป็นภาษาไทย ให้ตอบเป็นภาษาไทย หากถามเป็นภาษาอังกฤษ ให้ตอบเป็นภาษาอังกฤษ
+
+        Relevant Information (Context):
+        {context}
+
+        Question:
+        {input}
+
+        คำแนะนำเฉพาะสำหรับการตอบ:
+        1.  **จำกัดแหล่งข้อมูล:** ใช้ข้อมูลจาก 'Relevant Information (Context)' ที่ให้มาเท่านั้นในการตอบคำถามทั้งหมด
+        2.  **ระบุประเภทสินเชื่อ ("เป้า"):** หากคำถามระบุ "เป้า" ที่เฉพาะเจาะจง (เช่น สินเชื่อเป้า M, เงื่อนไขเป้า ก) ให้ค้นหาคำตอบสำหรับ "เป้า" นั้นๆ หากคำถามไม่ระบุ "เป้า" หรือเป็นคำถามทั่วไป ให้พยายามหาคำตอบที่เป็นกฎเกณฑ์ทั่วไป หรือระบุให้ชัดเจนว่าข้อมูลที่ตอบนั้นมาจาก "เป้า" ใด หรือเงื่อนไขแตกต่างกันอย่างไรระหว่าง "เป้า" ต่างๆ (ถ้าข้อมูลระบุไว้)
+        3.  **ค้นหารายละเอียดที่แม่นยำ:** ค้นหาข้อมูลที่ตรงกับคำถามให้มากที่สุด เช่น อัตราดอกเบี้ย, จำนวนงวด, คุณสมบัติผู้กู้/ผู้ค้ำ, เอกสารที่ต้องใช้, อายุรถสูงสุด, เกณฑ์การถือครองหลักประกัน, ข้อจำกัดด้านอาชีพ เป็นต้น
+        4.  **ระบุอำนาจยกเว้น:** หากใน Context มีการระบุ "อำนาจยกเว้น" หรือชื่อบุคคล/หน่วยงานที่สามารถอนุมัติยกเว้นเงื่อนไขที่เกี่ยวข้องกับคำถามได้ ให้ระบุข้อมูลส่วนนี้ในคำตอบด้วย
+        5.  **กรณีไม่พบข้อมูล:** หากไม่พบคำตอบใน Context ที่ให้มา ให้ตอบอย่างชัดเจนว่า "ข้อมูลนี้ไม่มีอยู่ในรายละเอียดที่ให้มา" หรือ "This information is not found in the provided context"
+        6.  **ภาษา:** ตอบคำถามด้วยภาษาเดียวกับที่ผู้ใช้ถาม (ไทย หรือ อังกฤษ)
+        7.  **ความชัดเจนและกระชับ:** ตอบคำถามให้ชัดเจน ตรงประเด็น และกระชับที่สุดเท่าที่จะทำได้โดยยังคงความถูกต้องครบถ้วนตาม Context
+
+        Answer:
+        """
+
+        llm = load_llm()
+        prompt = ChatPromptTemplate.from_template(prompt_template)
+        document_chain = create_stuff_documents_chain(llm, prompt)
+
+        return create_retrieval_chain(retriever, document_chain)
 
 def get_chat_preview(content, max_length=30):
     if not isinstance(content, str):
@@ -808,10 +558,7 @@ def manage_chat_history():
             for chat_id, chat_info in chats.items():
                 messages = chat_info.get("messages", [])
                 created_at_str = chat_info.get("created_at")
-                try:
-                    created_at = pd.to_datetime(created_at_str) if created_at_str else pd.Timestamp.now()
-                except ValueError:
-                    created_at = pd.Timestamp.now()
+                created_at = pd.to_datetime(created_at_str) if created_at_str else pd.Timestamp.now()
 
                 first_user_message = "..."
                 for msg in messages:
@@ -852,7 +599,37 @@ def manage_chat_history():
                                 st.rerun()
 
 def normal_response(message_placeholder, text):
-    message_placeholder.markdown(text)
+    if "No relevant information found" in text or "ไม่พบข้อมูลที่เกี่ยวข้อง" in text:
+        message_placeholder.markdown("I don't have specific information about this topic in my knowledge base.")
+        return
+        
+    lines = text.split('\n')
+    filtered_lines = []
+    skip_section = False
+    
+    for line in lines:
+        if "No specific sources found" in line or "No data available" in line:
+            continue
+            
+        if "Additional details:" in line and ("Not specified" in "".join(lines[lines.index(line):lines.index(line)+4])):
+            skip_section = True
+            continue
+            
+        if skip_section and line.strip() == "":
+            skip_section = False
+            continue
+            
+        if skip_section:
+            continue
+            
+        filtered_lines.append(line)
+    
+    cleaned_text = "\n".join(filtered_lines)
+    
+    if "**Reference Source:**" in cleaned_text and len(cleaned_text.split("**Reference Source:**")[1].strip()) < 5:
+        cleaned_text = cleaned_text.split("**Reference Source:**")[0].strip()
+    
+    message_placeholder.markdown(cleaned_text)
 
 def extract_vehicle_info(response, car_data):
     product_group = ""
@@ -901,27 +678,23 @@ def extract_vehicle_info(response, car_data):
     return product_group, gcode
 
 def route_query_to_appropriate_chain(user_input):
-    data_source, reformulated_question, reasoning, car_query, policy_query, language = analyze_question_agent(user_input)
+    data_source, reformulated_question, reasoning = analyze_question_agent(user_input)
     st.session_state.detected_mode = data_source
     
-    return data_source, reformulated_question, reasoning, car_query, policy_query, language
+    return reformulated_question, data_source, reasoning
 
 def main():
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "current_chat_id" not in st.session_state:
-        st.session_state.current_chat_id = f"chat_{int(time.time())}_{os.urandom(4).hex()}"
-    if "chat_mode" not in st.session_state:
-        st.session_state.chat_mode = "Auto-detect"
-    if "chat_mode_selected" not in st.session_state:
-        st.session_state.chat_mode_selected = True
-    if "detected_mode" not in st.session_state:
-        st.session_state.detected_mode = None
-    
+    st.session_state.setdefault("messages", [])
+    st.session_state.setdefault("current_chat_id", f"chat_{int(time.time())}_{os.urandom(4).hex()}")
+    st.session_state.setdefault("chat_mode", "Auto-detect")
+    st.session_state.setdefault("chat_mode_selected", True)
+    st.session_state.setdefault("detected_mode", None)
+
     with st.spinner("Loading resources..."):
         car_data = load_car_data(EXCEL_FILE_PATH)
-          
+
     manage_chat_history()
+
     st.markdown(
         """
         <div style="text-align: center;">
@@ -929,144 +702,70 @@ def main():
             <h1 style="font-size: 40px; font-weight: bold; margin-top: 10px;">Srisawad Chatbot</h1>
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
-    
+
     chat_container = st.container()
     with chat_container:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
-    
+
     if user_input := st.chat_input("Ask a question about cars or credit policy..."):
+        st.session_state.user_question = user_input
         save_chat_to_history(st.session_state.current_chat_id, "user", user_input)
         st.session_state.messages.append({"role": "user", "content": user_input})
+
         with chat_container:
             with st.chat_message("user"):
                 st.markdown(user_input)
-        
+
         with st.spinner("Analyzing your question..."):
-            data_source, reformulated_question, reasoning, car_query, policy_query, language = route_query_to_appropriate_chain(user_input)
-        
+            reformulated_question, detected_data_source, _ = route_query_to_appropriate_chain(user_input)
+
         with chat_container:
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
                 message_placeholder.markdown("Processing your question...")
-                
-                car_retriever, _ = create_car_vector_store()
-                policy_chain, policy_retriever = load_policy_data()
-                
-                if data_source == "Car Rate":
-                    car_chain = build_car_rag_chain()
-                    
-                    if not car_chain or car_data.empty:
-                        error_msg = "Sorry, I can't access car price information at the moment. Please try again later."
-                        normal_response(message_placeholder, error_msg)
-                        save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
-                        st.session_state.messages.append({"role": "assistant", "content": error_msg})
-                    else: 
-                        message_placeholder.markdown("Searching for car price information...")
-                        response = car_chain.invoke(reformulated_question)
-                        
-                        if not response or len(response) < 10:
-                            response = "I couldn't find specific information about this car model or price."
-                        
-                        product_group, gcode = extract_vehicle_info(response, car_data)
-                        full_response = build_car_response(response, product_group, gcode)
-                        
-                        normal_response(message_placeholder, full_response)
-                        save_chat_to_history(st.session_state.current_chat_id, "assistant", full_response)
-                        st.session_state.messages.append({"role": "assistant", "content": full_response})
-                        
-                        display_resource_cards()
-                        
-                elif data_source == "Credit Policy":
-                    if not policy_chain:
-                        error_msg = "Sorry, I can't access credit policy information at the moment. Please try again later."
-                        normal_response(message_placeholder, error_msg)
-                        save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
-                        st.session_state.messages.append({"role": "assistant", "content": error_msg})
-                    else:
-                        message_placeholder.markdown("Searching for policy information...")
-                        response = policy_chain.invoke(reformulated_question)
-                        
-                        sources = set()
-                        if hasattr(response, 'get') and callable(getattr(response, 'get')):
-                            for doc in response.get("context", []):
-                                if doc and hasattr(doc, 'metadata'):
-                                    source = doc.metadata.get("source")
-                                    if source:
-                                        sources.add(source)
-                            answer = response.get("answer", "I couldn't find specific information about this policy.")
-                        else:
-                            answer = response
 
-                        source_text = "\n\n---\n**Reference Source:**"
-                        if sources:
-                            source_text += "\n" + "\n".join(f"- {source}" for source in sources)
-                        else:
-                            source_text += "\n- No specific sources found"
-                        
-                        full_response = answer + source_text
-                        
-                        normal_response(message_placeholder, full_response)
-                        save_chat_to_history(st.session_state.current_chat_id, "assistant", full_response)
-                        st.session_state.messages.append({"role": "assistant", "content": full_response})
-                        display_resource_cards()
-                
-                elif data_source == "Hybrid":
-                    message_placeholder.markdown("Processing your question about both car pricing and credit policy...")
-                    
-                    if car_retriever and policy_retriever:
-                        hybrid_agent = create_hybrid_agent(car_retriever, policy_retriever)
-                        
-                        if hybrid_agent:
-                            response = hybrid_agent.invoke({
-                                "car_query": car_query or reformulated_question,
-                                "policy_query": policy_query or reformulated_question,
-                                "original_query": reformulated_question,
-                                "language": language
-                            })
-                            
-                            normal_response(message_placeholder, response)
-                            save_chat_to_history(st.session_state.current_chat_id, "assistant", response)
-                            st.session_state.messages.append({"role": "assistant", "content": response})
-                            display_resource_cards()
-                        else:
-                            error_msg = "Sorry, I couldn't create a hybrid agent to process your question. Please try asking about car rates or credit policies separately."
-                            normal_response(message_placeholder, error_msg)
-                            save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
-                            st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                if detected_data_source == "Car Rate":
+                    car_chain = build_car_rag_chain()
+                    if not car_chain or car_data.empty:
+                        response = "Sorry, I can't access car price information at the moment. Please try again later."
                     else:
-                        error_msg = "Sorry, I can't access both car and policy information simultaneously. Please try asking about them separately."
-                        normal_response(message_placeholder, error_msg)
-                        save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
-                        st.session_state.messages.append({"role": "assistant", "content": error_msg})
-                
-                else: 
-                    llm = load_llm()
-                    if llm:
-                        message_placeholder.markdown("Finding general information...")
-                        
-                        prompt = f"""
-                        You are an AI assistant for Srisawad Company. 
-                        Provide helpful information about the company based on your knowledge.
-                        
-                        User question: {reformulated_question}
-                        
-                        Answer the question to the best of your ability.
-                        If the question is in Thai, respond in Thai. If in English, respond in English.
-                        """
-                        
-                        response = llm.predict(prompt)
-                        normal_response(message_placeholder, response)
-                        save_chat_to_history(st.session_state.current_chat_id, "assistant", response)
-                        st.session_state.messages.append({"role": "assistant", "content": response})
+                        response = car_chain.invoke(reformulated_question) or "I couldn't find specific information about this car model or price."
+                        if len(response) >= 10:
+                            product_group, gcode = extract_vehicle_info(response, car_data)
+                            response = build_car_response(response, product_group, gcode)
+
+                    for i in range(len(response)):
+                        message_placeholder.markdown(response[:i + 1])
+                        time.sleep(0.015)
+
+                    save_chat_to_history(st.session_state.current_chat_id, "assistant", response)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    st.session_state.detected_mode = "Car Rate"
+                    display_resource_cards()
+
+                else:
+                    policy_chain = load_policy_data()
+                    if not policy_chain:
+                        response = "Sorry, I can't access credit policy information at the moment. Please try again later."
                     else:
-                        error_msg = "Sorry, I can't process your question at the moment. Please try again later."
-                        normal_response(message_placeholder, error_msg)
-                        save_chat_to_history(st.session_state.current_chat_id, "assistant", error_msg)
-                        st.session_state.messages.append({"role": "assistant", "content": error_msg})
+                        response = policy_chain.invoke({"input": reformulated_question})
+                        answer = response.get("answer", "I couldn't find specific information about this policy.")
+                        sources = {doc.metadata.get("source") for doc in response.get("context", []) if hasattr(doc, "metadata")}
+                        source_text = "\n\n---\n**Reference Source:**" + ("\n" + "\n".join(f"- {source}" for source in sources) if sources else "\n- No specific sources found")
+                        response = answer + source_text
+
+                    for i in range(len(response)):
+                        message_placeholder.markdown(response[:i + 1])
+                        time.sleep(0.02)
+
+                    save_chat_to_history(st.session_state.current_chat_id, "assistant", response)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    st.session_state.detected_mode = "Credit Policy"
+                    display_resource_cards()
 
 if __name__ == "__main__":
     main()
