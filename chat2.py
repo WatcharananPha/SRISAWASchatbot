@@ -26,6 +26,7 @@ JSON_PATH = "Jsonfile/M.JSON"
 CHAT_HISTORY_FILE = "chat_history_policy.json"
 EXCEL_FILE_PATH = r'Data real/Car rate book.xlsx'
 VECTOR_STORE_PATH = "car_rate_vectorstore"
+VECTOR_STORE_PATH_POLICY = "carpolicyindex"
 
 st.set_page_config(
     page_title="Srisawad Chat",
@@ -97,13 +98,11 @@ def apply_custom_css():
 def load_car_data(file_path):
     if not os.path.exists(file_path):
         return pd.DataFrame()
-    
     df = pd.read_excel(file_path, header=0, dtype=str).fillna('')
     df['MANUYR'] = pd.to_numeric(df['MANUYR'], errors='coerce').astype('Int64')
     df['RATE'] = pd.to_numeric(df['RATE'], errors='coerce').astype('Int64')
     df['FDATEA'] = pd.to_datetime(df['FDATEA'], format='%d-%b-%y', errors='coerce')
     df['LDATEA'] = pd.to_datetime(df['LDATEA'], format='%d-%b-%y', errors='coerce')
-    
     return df
 
 def format_car_row(row):
@@ -112,7 +111,6 @@ def format_car_row(row):
         'MANUYR': 'Year', 'GEAR': 'Transmission', 'GCODE': 'Vehicle Type',
         'PRODUCT GROUP': 'Product Group', 'RATE': 'Appraisal Price'
     }
-
     parts = []
     for col, label in columns_labels.items():
         value = row.get(col)
@@ -129,25 +127,20 @@ def format_car_row(row):
 def analyze_question_agent(user_input):
     car_keywords = ["car", "vehicle", "price", "truck", "motorcycle", "brand", "model", 
                    "รถยนต์", "รถเก๋ง", "รถกระบะ", "มอเตอร์ไซค์", "ราคา"]
-    
     policy_keywords = ["loan", "credit", "policy", "interest", "requirement", "สินเชื่อ", 
                       "เงินกู้", "ดอกเบี้ย", "หลักประกัน", "นโยบาย", "ctvgmhl"]
-    
     car_count = sum(1 for word in car_keywords if word.lower() in user_input.lower())
     policy_count = sum(1 for word in policy_keywords if word.lower() in user_input.lower())
-
     if car_count > policy_count:
         data_source = "Car Rate"
         reasoning = f"Keyword matching: {car_count} car keywords vs {policy_count} policy keywords"
         return data_source, user_input, reasoning
-
     llm = AzureChatOpenAI(
         openai_api_version="2024-12-01-preview",
         azure_deployment="dataiku-ssci-gpt-4o", 
         temperature=1.0, 
         max_tokens=4096,  
     )
-    
     template = """
     You are an AI agent responsible for analyzing user questions and determining whether they should be directed to 
     the Car Rate book search or Credit Policy search. 
@@ -160,7 +153,6 @@ def analyze_question_agent(user_input):
     REASONING: [Brief explanation of your decision]
     LANGUAGE: [Thai or English - determine based on the language of the input question]
     """
-    
     prompt = PromptTemplate(template=template, input_variables=["question"])
     agent_chain = prompt | llm | StrOutputParser()
     result = agent_chain.invoke({"question": user_input})
@@ -168,7 +160,6 @@ def analyze_question_agent(user_input):
     data_source = None
     reformulated_question = user_input
     reasoning = ""
-    
     for line in lines:
         if line.startswith('DATA_SOURCE:'):
             data_source = line.replace('DATA_SOURCE:', '').strip()
@@ -176,13 +167,10 @@ def analyze_question_agent(user_input):
             reformulated_question = line.replace('REFORMULATED_QUESTION:', '').strip()
         elif line.startswith('REASONING:'):
             reasoning = line.replace('REASONING:', '').strip()
-
     if not data_source:
         data_source = "Credit Policy" if policy_count >= car_count else "Car Rate"
-
     if any(keyword in user_input.lower() for keyword in car_keywords) and not data_source:
         return "Car Rate", user_input, "Fallback: Basic keyword detection"
-    
     return data_source, reformulated_question, reasoning
 
 def build_car_response(answer, product_group=None, gcode=None):
@@ -197,7 +185,6 @@ def create_embeddings_model():
             if text is None:
                 text = ""
             return super().embed_query(text)
-            
     return SafeHuggingFaceBgeEmbeddings(
         model_name=EMBEDDING_MODEL_NAME,
         model_kwargs={'device': 'cpu'},
@@ -205,29 +192,33 @@ def create_embeddings_model():
         query_instruction="Represent this query for retrieving relevant documents: "
     )
 
+def load_or_create_faiss_index(documents, embed_model, index_path):
+    if os.path.exists(index_path):
+        vectorstore = FAISS.load_local(index_path, embed_model)
+    else:
+        vectorstore = FAISS.from_documents(documents, embed_model)
+        vectorstore.save_local(index_path)
+    return vectorstore
+
 @st.cache_resource
 def create_car_vector_store():
     car_data = load_car_data(EXCEL_FILE_PATH)
     texts = [format_car_row(row) for _, row in car_data.iterrows()]
     documents = [Document(page_content=text, metadata={"id": str(i)}) for i, text in enumerate(texts)]
-    embed_model = create_embeddings_model()    
-    vector_store = FAISS.from_documents(documents, embed_model)
-    vector_store.save_local(VECTOR_STORE_PATH)
-        
+    embed_model = create_embeddings_model()
+    vector_store = load_or_create_faiss_index(documents, embed_model, VECTOR_STORE_PATH)
     return vector_store, embed_model
 
 @st.cache_resource
 def build_car_rag_chain():
     vector_store, _ = create_car_vector_store()
     retriever = vector_store.as_retriever(search_kwargs={"k": 3})
-    
     llm = AzureChatOpenAI(
         openai_api_version="2024-12-01-preview",
         azure_deployment="dataiku-ssci-gpt-4o",
         temperature=1.0,
-        max_tokens=4096, 
+        max_tokens=8192, 
     )
-
     template = """
     คุณคือ AI ผู้ช่วยเชี่ยวชาญด้านข้อมูลราคารถยนต์ของศรีสวัสดิ์ (Srisawad's car pricing information) หน้าที่ของคุณคือตอบคำถามเกี่ยวกับราคารถยนต์โดยใช้ข้อมูลที่ให้ไว้ใน 'Relevant car pricing information (Context)' เท่านั้น โดยอ้างอิง **โครงสร้างข้อมูลและ Mapping ที่ให้ไว้ด้านล่างนี้** เพื่อทำความเข้าใจข้อมูลใน Context และต้องตอบในรูปแบบที่กำหนดด้านล่างนี้อย่างเคร่งครัด
 
@@ -328,21 +319,42 @@ def build_car_rag_chain():
     **Answer:**
     """
     prompt = PromptTemplate(template=template, input_variables=["context", "question"])
-
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
-
     rag_chain = (
         {"context": retriever | format_docs, "question": RunnablePassthrough()}
         | prompt
         | llm
         | StrOutputParser()
     )
-
     return rag_chain
 
-def normal_response(message_placeholder, text):
+def display_normal_message(message_placeholder, text):
     message_placeholder.markdown(text)
+
+def clean_assistant_response(message_placeholder, text):
+    if "No relevant information found" in text or "ไม่พบข้อมูลที่เกี่ยวข้อง" in text:
+        message_placeholder.markdown("I don't have specific information about this topic in my knowledge base.")
+        return
+    lines = text.split('\n')
+    filtered_lines = []
+    skip_section = False
+    for line in lines:
+        if "No specific sources found" in line or "No data available" in line:
+            continue
+        if "Additional details:" in line and ("Not specified" in "".join(lines[lines.index(line):lines.index(line)+4])):
+            skip_section = True
+            continue
+        if skip_section and line.strip() == "":
+            skip_section = False
+            continue
+        if skip_section:
+            continue
+        filtered_lines.append(line)
+    cleaned_text = "\n".join(filtered_lines)
+    if "**Reference Source:**" in cleaned_text and len(cleaned_text.split("**Reference Source:**")[1].strip()) < 5:
+        cleaned_text = cleaned_text.split("**Reference Source:**")[0].strip()
+    message_placeholder.markdown(cleaned_text)
 
 def format_value(value):
     if isinstance(value, list):
@@ -355,12 +367,10 @@ def format_value(value):
 def parse_json_to_docs(data, parent_key="", docs=None):
     if docs is None:
         docs = []
-
     if isinstance(data, dict):
         current_topic = data.get("หัวข้อ", data.get("หัวข้อย่อย", parent_key.strip('.')))
         content_parts = []
         metadata = {"source": parent_key.strip('.')}
-
         for key, value in data.items():
             current_key = f"{parent_key}{key}" if parent_key else key
             if isinstance(value, (dict, list)) and key not in ["หัวข้อ", "หัวข้อย่อย"]:
@@ -368,16 +378,13 @@ def parse_json_to_docs(data, parent_key="", docs=None):
             elif key not in ["หัวข้อ", "หัวข้อย่อย"]:
                 readable_key = key.replace("_", " ").replace("เป้า ", "Target ")
                 content_parts.append(f"{readable_key}: {format_value(value)}")
-
         if content_parts:
             page_content = f"Topic: {current_topic}\n" + "\n".join(content_parts)
             docs.append(Document(page_content=page_content.strip(), metadata=metadata))
-
     elif isinstance(data, list) and parent_key:
         page_content = f"Topic: {parent_key.strip('.')}\n{format_value(data)}"
         metadata = {"source": parent_key.strip('.')}
         docs.append(Document(page_content=page_content.strip(), metadata=metadata))
-
     return docs
 
 def display_resource_cards():
@@ -416,20 +423,15 @@ def load_chat_history():
     chat_dir = os.path.dirname(CHAT_HISTORY_FILE)
     if chat_dir:
         os.makedirs(chat_dir, exist_ok=True)
-
     if not os.path.exists(CHAT_HISTORY_FILE):
         with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump({"chats": {}}, f)
         return {"chats": {}}
-    
     with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
         content = f.read()
         return json.loads(content) if content else {"chats": {}}
 
 def save_chat_history(history):
-    chat_dir = os.path.dirname(CHAT_HISTORY_FILE)
-    if chat_dir:
-        os.makedirs(chat_dir, exist_ok=True)
     with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(history, f, ensure_ascii=False, indent=2, default=str)
 
@@ -437,7 +439,6 @@ def save_chat_to_history(chat_id, role, content):
     history = load_chat_history()
     if "chats" not in history:
         history["chats"] = {}
-    
     if chat_id not in history["chats"]:
         history["chats"][chat_id] = {
             "messages": [],
@@ -445,7 +446,6 @@ def save_chat_to_history(chat_id, role, content):
         }
     elif "messages" not in history["chats"][chat_id]:
         history["chats"][chat_id]["messages"] = []
-    
     history["chats"][chat_id]["messages"].append({
         "role": role,
         "content": content,
@@ -454,9 +454,6 @@ def save_chat_to_history(chat_id, role, content):
     save_chat_history(history)
 
 def delete_chat_history():
-    chat_dir = os.path.dirname(CHAT_HISTORY_FILE)
-    if chat_dir:
-        os.makedirs(chat_dir, exist_ok=True)
     with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump({"chats": {}}, f)
     return True
@@ -484,9 +481,8 @@ def load_policy_data():
     with open(JSON_PATH, "r", encoding="utf-8") as f:
         policy_data = json.load(f)
         documents = parse_json_to_docs(policy_data)
-        vectorstore = FAISS.from_documents(documents, embed_model)
+        vectorstore = load_or_create_faiss_index(documents, embed_model, VECTOR_STORE_PATH_POLICY)
         retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
-
         prompt_template = """
         คุณคือผู้เชี่ยวชาญ AI ด้านนโยบายสินเชื่อของศรีสวัสดิ์ (Srisawad's credit policies) โดยเฉพาะอย่างยิ่งข้อมูลที่ให้ไว้ด้านล่างนี้
         หน้าที่ของคุณคือตอบคำถามโดยอ้างอิงจากข้อมูลที่ให้ไว้ในส่วน 'Relevant Information (Context)' เท่านั้น
@@ -511,11 +507,9 @@ def load_policy_data():
 
         Answer:
         """
-
         llm = load_llm()
         prompt = ChatPromptTemplate.from_template(prompt_template)
         document_chain = create_stuff_documents_chain(llm, prompt)
-
         return create_retrieval_chain(retriever, document_chain)
 
 def get_chat_preview(content, max_length=30):
@@ -529,7 +523,6 @@ def manage_chat_history():
     with st.sidebar:
         apply_custom_css()
         st.markdown('<h1 style="text-align: center; font-size: 32px;">Chat History</h1>', unsafe_allow_html=True)
-
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🗪 New Chat", type="primary", use_container_width=True):
@@ -546,11 +539,9 @@ def manage_chat_history():
                     st.session_state.session_vector_store = None
                     st.session_state.detected_mode = None
                     st.rerun()
-
         st.divider()
         history = load_chat_history()
         chats = history.get("chats", {})
-
         if not chats:
             st.caption("No past chats.")
         else:
@@ -559,14 +550,12 @@ def manage_chat_history():
                 messages = chat_info.get("messages", [])
                 created_at_str = chat_info.get("created_at")
                 created_at = pd.to_datetime(created_at_str) if created_at_str else pd.Timestamp.now()
-
                 first_user_message = "..."
                 for msg in messages:
                     if msg.get("role") == "user":
                         first_user_message = msg.get("content", "...")
                         break
                 chat_list.append((created_at, chat_id, first_user_message))
-
             chat_list.sort(key=lambda x: x[0], reverse=True)
             chats_by_date = {}
             for created_at, chat_id, first_message in chat_list:
@@ -574,12 +563,10 @@ def manage_chat_history():
                 if date_str not in chats_by_date:
                     chats_by_date[date_str] = []
                 chats_by_date[date_str].append((chat_id, first_message))
-
             for date_str in sorted(chats_by_date.keys(), reverse=True):
                 st.markdown(f'<div class="chat-date-header">{date_str}</div>', unsafe_allow_html=True)
                 for chat_id, first_message in chats_by_date[date_str]:
                     col_btn, col_del = st.columns([0.85, 0.15])
-                    
                     with col_btn:
                         preview_text = get_chat_preview(first_message)
                         if st.button(preview_text, key=f"load_{chat_id}", use_container_width=True):
@@ -589,7 +576,6 @@ def manage_chat_history():
                             ]
                             st.session_state.current_chat_id = chat_id
                             st.rerun()
-                    
                     with col_del:
                         if st.button("🗑️", key=f"delete_{chat_id}", help="Delete chat"):
                             if delete_single_chat(chat_id):
@@ -598,65 +584,27 @@ def manage_chat_history():
                                     st.session_state.messages = []
                                 st.rerun()
 
-def normal_response(message_placeholder, text):
-    if "No relevant information found" in text or "ไม่พบข้อมูลที่เกี่ยวข้อง" in text:
-        message_placeholder.markdown("I don't have specific information about this topic in my knowledge base.")
-        return
-        
-    lines = text.split('\n')
-    filtered_lines = []
-    skip_section = False
-    
-    for line in lines:
-        if "No specific sources found" in line or "No data available" in line:
-            continue
-            
-        if "Additional details:" in line and ("Not specified" in "".join(lines[lines.index(line):lines.index(line)+4])):
-            skip_section = True
-            continue
-            
-        if skip_section and line.strip() == "":
-            skip_section = False
-            continue
-            
-        if skip_section:
-            continue
-            
-        filtered_lines.append(line)
-    
-    cleaned_text = "\n".join(filtered_lines)
-    
-    if "**Reference Source:**" in cleaned_text and len(cleaned_text.split("**Reference Source:**")[1].strip()) < 5:
-        cleaned_text = cleaned_text.split("**Reference Source:**")[0].strip()
-    
-    message_placeholder.markdown(cleaned_text)
-
 def extract_vehicle_info(response, car_data):
     product_group = ""
     gcode = ""
-
     pg_patterns = [
         r"PRODUCT GROUP[:\s]+([A-Z])",
         r"กลุ่มผลิตภัณฑ์[:\s]+([A-Z])"
     ]
-    
     gcode_patterns = [
         r"GCODE[:\s]+([A-Za-z0-9]+)",
         r"ประเภทรถ[:\s]+([A-Za-z0-9]+)"
     ]
-
     for pattern in pg_patterns:
         matches = re.search(pattern, response)
         if matches:
             product_group = matches.group(1)
             break
-    
     for pattern in gcode_patterns:
         matches = re.search(pattern, response)
         if matches:
             gcode = matches.group(1)
             break
-
     if not product_group:
         response_lower = response.lower()
         if any(keyword in response_lower for keyword in ['motorcycle', 'มอเตอร์ไซค์']):
@@ -671,16 +619,13 @@ def extract_vehicle_info(response, car_data):
         elif any(keyword in response_lower for keyword in ['pickup', 'รถกระบะ']):
             product_group = 'C'
             gcode = 'P1'
-
     product_group = product_group or 'C'
     gcode = gcode or 'CA'
-    
     return product_group, gcode
 
 def route_query_to_appropriate_chain(user_input):
     data_source, reformulated_question, reasoning = analyze_question_agent(user_input)
     st.session_state.detected_mode = data_source
-    
     return reformulated_question, data_source, reasoning
 
 def main():
@@ -689,12 +634,9 @@ def main():
     st.session_state.setdefault("chat_mode", "Auto-detect")
     st.session_state.setdefault("chat_mode_selected", True)
     st.session_state.setdefault("detected_mode", None)
-
     with st.spinner("Loading resources..."):
         car_data = load_car_data(EXCEL_FILE_PATH)
-
     manage_chat_history()
-
     st.markdown(
         """
         <div style="text-align: center;">
@@ -704,30 +646,24 @@ def main():
         """,
         unsafe_allow_html=True,
     )
-
     chat_container = st.container()
     with chat_container:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
-
     if user_input := st.chat_input("Ask a question about cars or credit policy..."):
         st.session_state.user_question = user_input
         save_chat_to_history(st.session_state.current_chat_id, "user", user_input)
         st.session_state.messages.append({"role": "user", "content": user_input})
-
         with chat_container:
             with st.chat_message("user"):
                 st.markdown(user_input)
-
         with st.spinner("Analyzing your question..."):
             reformulated_question, detected_data_source, _ = route_query_to_appropriate_chain(user_input)
-
         with chat_container:
             with st.chat_message("assistant"):
                 message_placeholder = st.empty()
                 message_placeholder.markdown("Processing your question...")
-
                 if detected_data_source == "Car Rate":
                     car_chain = build_car_rag_chain()
                     if not car_chain or car_data.empty:
@@ -737,16 +673,13 @@ def main():
                         if len(response) >= 10:
                             product_group, gcode = extract_vehicle_info(response, car_data)
                             response = build_car_response(response, product_group, gcode)
-
                     for i in range(len(response)):
                         message_placeholder.markdown(response[:i + 1])
                         time.sleep(0.015)
-
                     save_chat_to_history(st.session_state.current_chat_id, "assistant", response)
                     st.session_state.messages.append({"role": "assistant", "content": response})
                     st.session_state.detected_mode = "Car Rate"
                     display_resource_cards()
-
                 else:
                     policy_chain = load_policy_data()
                     if not policy_chain:
@@ -757,11 +690,9 @@ def main():
                         sources = {doc.metadata.get("source") for doc in response.get("context", []) if hasattr(doc, "metadata")}
                         source_text = "\n\n---\n**Reference Source:**" + ("\n" + "\n".join(f"- {source}" for source in sources) if sources else "\n- No specific sources found")
                         response = answer + source_text
-
                     for i in range(len(response)):
                         message_placeholder.markdown(response[:i + 1])
                         time.sleep(0.02)
-
                     save_chat_to_history(st.session_state.current_chat_id, "assistant", response)
                     st.session_state.messages.append({"role": "assistant", "content": response})
                     st.session_state.detected_mode = "Credit Policy"
