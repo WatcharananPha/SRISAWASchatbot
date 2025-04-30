@@ -22,9 +22,11 @@ os.environ["AZURE_OPENAI_API_KEY"] = 'd8e93330e8384f06aa1c8ace726af49e'
 os.environ["AZURE_OPENAI_ENDPOINT"] = 'https://dataiku-gpt4ommi.openai.azure.com/'
 
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
+JSON_PATH = "Jsonfile/M.JSON"
 CHAT_HISTORY_FILE = "chat_history_policy.json"
-VECTOR_STORE_PATH = "carratevectorstore"           # For Car Rate
-VECTOR_STORE_PATH_POLICY = "carrateindex"          # For Policy
+EXCEL_FILE_PATH = r'Data real/Car rate book.xlsx'
+VECTOR_STORE_PATH = "car_rate_vectorstore"
+VECTOR_STORE_PATH_POLICY = "carpolicyindex"
 
 st.set_page_config(
     page_title="Srisawad Chat",
@@ -199,23 +201,23 @@ def load_or_create_faiss_index(documents, embed_model, index_path):
     return vectorstore
 
 @st.cache_resource
-def get_car_vector_store():
+def create_car_vector_store():
+    car_data = load_car_data(EXCEL_FILE_PATH)
+    texts = [format_car_row(row) for _, row in car_data.iterrows()]
+    documents = [Document(page_content=text, metadata={"id": str(i)}) for i, text in enumerate(texts)]
     embed_model = create_embeddings_model()
-    if os.path.exists(VECTOR_STORE_PATH) and any(fname.endswith("index") for fname in os.listdir(VECTOR_STORE_PATH)):
-        vector_store = FAISS.load_local(VECTOR_STORE_PATH, embed_model)
-    else:
-        raise RuntimeError(f"Car vector store index not found at '{VECTOR_STORE_PATH}'. Please ensure the index exists.")
+    vector_store = load_or_create_faiss_index(documents, embed_model, VECTOR_STORE_PATH)
     return vector_store, embed_model
 
 @st.cache_resource
 def build_car_rag_chain():
-    vector_store, _ = get_car_vector_store()
+    vector_store, _ = create_car_vector_store()
     retriever = vector_store.as_retriever(search_kwargs={"k": 3})
     llm = AzureChatOpenAI(
         openai_api_version="2024-12-01-preview",
         azure_deployment="dataiku-ssci-gpt-4o",
         temperature=1.0,
-        max_tokens=8192, 
+        max_tokens=4096, 
     )
     template = """
     คุณคือ AI ผู้ช่วยเชี่ยวชาญด้านข้อมูลราคารถยนต์ของศรีสวัสดิ์ (Srisawad's car pricing information) หน้าที่ของคุณคือตอบคำถามเกี่ยวกับราคารถยนต์โดยใช้ข้อมูลที่ให้ไว้ใน 'Relevant car pricing information (Context)' เท่านั้น โดยอ้างอิง **โครงสร้างข้อมูลและ Mapping ที่ให้ไว้ด้านล่างนี้** เพื่อทำความเข้าใจข้อมูลใน Context และต้องตอบในรูปแบบที่กำหนดด้านล่างนี้อย่างเคร่งครัด
@@ -476,35 +478,41 @@ def load_llm():
 @st.cache_resource
 def load_policy_data():
     embed_model = create_embeddings_model()
-    if os.path.exists(VECTOR_STORE_PATH_POLICY) and any(fname.endswith("index") for fname in os.listdir(VECTOR_STORE_PATH_POLICY)):
-        vectorstore = FAISS.load_local(VECTOR_STORE_PATH_POLICY, embed_model)
-    else:
-        raise RuntimeError(f"Policy vector store index not found at '{VECTOR_STORE_PATH_POLICY}'. Please ensure the index exists.")
+    try:
+        vectorstore = FAISS.load_local(
+            VECTOR_STORE_PATH_POLICY,
+            embed_model,
+            allow_dangerous_deserialization=True  # <-- IMPORTANT!
+        )
+    except Exception as e:
+        st.error(f"Error loading policy vector store: {e}")
+        # fallback or raise
+        raise
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     prompt_template = """
-    คุณคือผู้เชี่ยวชาญ AI ด้านนโยบายสินเชื่อของศรีสวัสดิ์ (Srisawad's credit policies) โดยเฉพาะอย่างยิ่งข้อมูลที่ให้ไว้ด้านล่างนี้
-    หน้าที่ของคุณคือตอบคำถามโดยอ้างอิงจากข้อมูลที่ให้ไว้ในส่วน 'Relevant Information (Context)' เท่านั้น
-    ข้อมูลใน Context ประกอบด้วยรายละเอียดเงื่อนไขสำหรับสินเชื่อประเภทต่างๆ หรือ "เป้า" ที่แตกต่างกัน (เช่น เป้า M, เป้า ก, เป้า F, เป้า H, เป้า L) รวมถึงเงื่อนไขย่อย, เอกสารที่ต้องการ, ข้อห้าม, และอำนาจในการอนุมัติหรือยกเว้น
+        คุณคือผู้เชี่ยวชาญ AI ด้านนโยบายสินเชื่อของศรีสวัสดิ์ (Srisawad's credit policies) โดยเฉพาะอย่างยิ่งข้อมูลที่ให้ไว้ด้านล่างนี้
+        หน้าที่ของคุณคือตอบคำถามโดยอ้างอิงจากข้อมูลที่ให้ไว้ในส่วน 'Relevant Information (Context)' เท่านั้น
+        ข้อมูลใน Context ประกอบด้วยรายละเอียดเงื่อนไขสำหรับสินเชื่อประเภทต่างๆ หรือ "เป้า" ที่แตกต่างกัน (เช่น เป้า M, เป้า ก, เป้า F, เป้า H, เป้า L) รวมถึงเงื่อนไขย่อย, เอกสารที่ต้องการ, ข้อห้าม, และอำนาจในการอนุมัติหรือยกเว้น
 
-    หากผู้ใช้ถามเป็นภาษาไทย ให้ตอบเป็นภาษาไทย หากถามเป็นภาษาอังกฤษ ให้ตอบเป็นภาษาอังกฤษ
+        หากผู้ใช้ถามเป็นภาษาไทย ให้ตอบเป็นภาษาไทย หากถามเป็นภาษาอังกฤษ ให้ตอบเป็นภาษาอังกฤษ
 
-    Relevant Information (Context):
-    {context}
+        Relevant Information (Context):
+        {context}
 
-    Question:
-    {input}
+        Question:
+        {input}
 
-    คำแนะนำเฉพาะสำหรับการตอบ:
-    1.  **จำกัดแหล่งข้อมูล:** ใช้ข้อมูลจาก 'Relevant Information (Context)' ที่ให้มาเท่านั้นในการตอบคำถามทั้งหมด
-    2.  **ระบุประเภทสินเชื่อ ("เป้า"):** หากคำถามระบุ "เป้า" ที่เฉพาะเจาะจง (เช่น สินเชื่อเป้า M, เงื่อนไขเป้า ก) ให้ค้นหาคำตอบสำหรับ "เป้า" นั้นๆ หากคำถามไม่ระบุ "เป้า" หรือเป็นคำถามทั่วไป ให้พยายามหาคำตอบที่เป็นกฎเกณฑ์ทั่วไป หรือระบุให้ชัดเจนว่าข้อมูลที่ตอบนั้นมาจาก "เป้า" ใด หรือเงื่อนไขแตกต่างกันอย่างไรระหว่าง "เป้า" ต่างๆ (ถ้าข้อมูลระบุไว้)
-    3.  **ค้นหารายละเอียดที่แม่นยำ:** ค้นหาข้อมูลที่ตรงกับคำถามให้มากที่สุด เช่น อัตราดอกเบี้ย, จำนวนงวด, คุณสมบัติผู้กู้/ผู้ค้ำ, เอกสารที่ต้องใช้, อายุรถสูงสุด, เกณฑ์การถือครองหลักประกัน, ข้อจำกัดด้านอาชีพ เป็นต้น
-    4.  **ระบุอำนาจยกเว้น:** หากใน Context มีการระบุ "อำนาจยกเว้น" หรือชื่อบุคคล/หน่วยงานที่สามารถอนุมัติยกเว้นเงื่อนไขที่เกี่ยวข้องกับคำถามได้ ให้ระบุข้อมูลส่วนนี้ในคำตอบด้วย
-    5.  **กรณีไม่พบข้อมูล:** หากไม่พบคำตอบใน Context ที่ให้มา ให้ตอบอย่างชัดเจนว่า "ข้อมูลนี้ไม่มีอยู่ในรายละเอียดที่ให้มา" หรือ "This information is not found in the provided context"
-    6.  **ภาษา:** ตอบคำถามด้วยภาษาเดียวกับที่ผู้ใช้ถาม (ไทย หรือ อังกฤษ)
-    7.  **ความชัดเจนและกระชับ:** ตอบคำถามให้ชัดเจน ตรงประเด็น และกระชับที่สุดเท่าที่จะทำได้โดยยังคงความถูกต้องครบถ้วนตาม Context
+        คำแนะนำเฉพาะสำหรับการตอบ:
+        1.  **จำกัดแหล่งข้อมูล:** ใช้ข้อมูลจาก 'Relevant Information (Context)' ที่ให้มาเท่านั้นในการตอบคำถามทั้งหมด
+        2.  **ระบุประเภทสินเชื่อ ("เป้า"):** หากคำถามระบุ "เป้า" ที่เฉพาะเจาะจง (เช่น สินเชื่อเป้า M, เงื่อนไขเป้า ก) ให้ค้นหาคำตอบสำหรับ "เป้า" นั้นๆ หากคำถามไม่ระบุ "เป้า" หรือเป็นคำถามทั่วไป ให้พยายามหาคำตอบที่เป็นกฎเกณฑ์ทั่วไป หรือระบุให้ชัดเจนว่าข้อมูลที่ตอบนั้นมาจาก "เป้า" ใด หรือเงื่อนไขแตกต่างกันอย่างไรระหว่าง "เป้า" ต่างๆ (ถ้าข้อมูลระบุไว้)
+        3.  **ค้นหารายละเอียดที่แม่นยำ:** ค้นหาข้อมูลที่ตรงกับคำถามให้มากที่สุด เช่น อัตราดอกเบี้ย, จำนวนงวด, คุณสมบัติผู้กู้/ผู้ค้ำ, เอกสารที่ต้องใช้, อายุรถสูงสุด, เกณฑ์การถือครองหลักประกัน, ข้อจำกัดด้านอาชีพ เป็นต้น
+        4.  **ระบุอำนาจยกเว้น:** หากใน Context มีการระบุ "อำนาจยกเว้น" หรือชื่อบุคคล/หน่วยงานที่สามารถอนุมัติยกเว้นเงื่อนไขที่เกี่ยวข้องกับคำถามได้ ให้ระบุข้อมูลส่วนนี้ในคำตอบด้วย
+        5.  **กรณีไม่พบข้อมูล:** หากไม่พบคำตอบใน Context ที่ให้มา ให้ตอบอย่างชัดเจนว่า "ข้อมูลนี้ไม่มีอยู่ในรายละเอียดที่ให้มา" หรือ "This information is not found in the provided context"
+        6.  **ภาษา:** ตอบคำถามด้วยภาษาเดียวกับที่ผู้ใช้ถาม (ไทย หรือ อังกฤษ)
+        7.  **ความชัดเจนและกระชับ:** ตอบคำถามให้ชัดเจน ตรงประเด็น และกระชับที่สุดเท่าที่จะทำได้โดยยังคงความถูกต้องครบถ้วนตาม Context
 
-    Answer:
-    """
+        Answer:
+        """
     llm = load_llm()
     prompt = ChatPromptTemplate.from_template(prompt_template)
     document_chain = create_stuff_documents_chain(llm, prompt)
@@ -697,4 +705,4 @@ def main():
                     display_resource_cards()
 
 if __name__ == "__main__":
-    main() 
+    main()
