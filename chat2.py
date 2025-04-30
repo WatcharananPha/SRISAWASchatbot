@@ -211,7 +211,7 @@ def create_car_vector_store():
             vector_store = FAISS.load_local(
                 VECTOR_STORE_PATH,
                 embed_model,
-                allow_dangerous_deserialization=True  # <-- ADD THIS LINE
+                allow_dangerous_deserialization=True
             )
             return vector_store, embed_model
         except Exception as e:
@@ -492,11 +492,10 @@ def load_policy_data():
         vectorstore = FAISS.load_local(
             VECTOR_STORE_PATH_POLICY,
             embed_model,
-            allow_dangerous_deserialization=True  # <-- IMPORTANT!
+            allow_dangerous_deserialization=True
         )
     except Exception as e:
         st.error(f"Error loading policy vector store: {e}")
-        # fallback or raise
         raise
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
     prompt_template = """
