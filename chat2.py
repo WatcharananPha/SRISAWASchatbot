@@ -227,7 +227,7 @@ def build_car_rag_chain():
         openai_api_version="2024-12-01-preview",
         azure_deployment="dataiku-ssci-gpt-4o",
         temperature=1.0,
-        max_tokens=4096, 
+        max_tokens=8192, 
     )
     template = """
     คุณคือ AI ผู้ช่วยเชี่ยวชาญด้านข้อมูลราคารถยนต์ของศรีสวัสดิ์ (Srisawad's car pricing information) หน้าที่ของคุณคือตอบคำถามเกี่ยวกับราคารถยนต์โดยใช้ข้อมูลที่ให้ไว้ใน 'Relevant car pricing information (Context)' เท่านั้น โดยอ้างอิง **โครงสร้างข้อมูลและ Mapping ที่ให้ไว้ด้านล่างนี้** เพื่อทำความเข้าใจข้อมูลใน Context และต้องตอบในรูปแบบที่กำหนดด้านล่างนี้อย่างเคร่งครัด
@@ -482,7 +482,7 @@ def load_llm():
         openai_api_version="2024-12-01-preview",
         azure_deployment="dataiku-ssci-gpt-4o",
         temperature=1.0,
-        max_tokens=4096,
+        max_tokens=8192,
     )
 
 @st.cache_resource
