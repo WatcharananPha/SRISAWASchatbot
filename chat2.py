@@ -94,6 +94,79 @@ def apply_custom_css():
         </style>
     """, unsafe_allow_html=True)
 
+CAR_IMAGE_MAPPING = {
+    "fortuner 2.7 เกียร์ออโต้_2019": "https://img.kaidee.com/prd/20250314/370577470/b/fee4c680-f76f-4f88-a07a-ba47cdd77595.jpg",
+}
+
+def extract_car_details_for_image(response_text):
+    model_details_str = None
+    year = None
+    model_match = re.search(r"ราคาของ\s*(.*?)\s*ราคา", response_text, re.IGNORECASE)
+    
+    if model_match:
+        potential_model_str = model_match.group(1).strip()
+        year_match_inside = re.search(r'(?:ปี|,|\s)\s*\b(19[8-9]\d|20[0-2]\d)\b', potential_model_str)
+        
+        if year_match_inside:
+            year = year_match_inside.group(1)
+            model_details_str = re.sub(r'(?:ปี|,|\s)\s*\b' + year + r'\b', '', potential_model_str).strip()
+            model_details_str = model_details_str.rstrip(',')
+        else:
+            model_details_str = potential_model_str
+            year_match_fallback = re.search(r'\b(19[8-9]\d|20[0-2]\d)\b', response_text)
+            if year_match_fallback:
+                year = year_match_fallback.group(1)
+    else:
+        year_match_global = re.search(r'\b(19[8-9]\d|20[0-2]\d)\b', response_text)
+        if year_match_global:
+            year = year_match_global.group(1)
+
+    if model_details_str:
+        model_details_str = re.sub(r'\s+', ' ', model_details_str).strip()
+
+    return model_details_str, year
+
+def normalize_key_string(text):
+    if not text:
+        return ""
+    text_lower = text.lower()
+    text_no_pee = re.sub(r'\bปี\b', '', text_lower).strip()
+    text_no_comma = text_no_pee.replace(',', '')
+    normalized_space = re.sub(r'\s+', ' ', text_no_comma).strip()
+    return normalized_space
+
+def get_car_image_url(model_details, year):
+    if not model_details or not year:
+        return None
+
+    normalized_model = normalize_key_string(model_details)
+    lookup_key = f"{normalized_model}_{year}"
+    found_url = CAR_IMAGE_MAPPING.get(lookup_key)
+
+    if not found_url:
+        normalized_model_parts = set(normalized_model.split())
+        best_match_score = 0.0
+        best_match_url = None
+
+        for key, url in CAR_IMAGE_MAPPING.items():
+            if key.endswith(f"_{year}"):
+                key_model_part = key.rsplit('_', 1)[0]
+                key_model_parts = set(key_model_part.split())
+
+                intersection = len(normalized_model_parts.intersection(key_model_parts))
+                union = len(normalized_model_parts.union(key_model_parts))
+
+                if union > 0:
+                    score = intersection / union
+                    if score > best_match_score and score >= 0.7:
+                        best_match_score = score
+                        best_match_url = url
+
+        if best_match_url:
+            found_url = best_match_url
+
+    return found_url
+
 @st.cache_resource
 def load_car_data(file_path):
     if not os.path.exists(file_path):
@@ -911,9 +984,11 @@ def main():
     st.session_state.setdefault("chat_mode", "Auto-detect")
     st.session_state.setdefault("chat_mode_selected", True)
     st.session_state.setdefault("detected_mode", None)
+
     with st.spinner("Loading resources..."):
         car_data = load_car_data(EXCEL_FILE_PATH)
     manage_chat_history()
+
     st.markdown(
         """
         <div style="text-align: center;">
@@ -923,11 +998,20 @@ def main():
         """,
         unsafe_allow_html=True,
     )
+
     chat_container = st.container()
     with chat_container:
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
+                if message["role"] == "assistant" and message.get("image_url"):
+                    st.markdown(
+                        f'<div style="text-align: center;">'
+                        f'<img src="{message["image_url"]}" width="300" style="margin-bottom: 10px;">'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
                 st.markdown(message["content"])
+
     if user_input := st.chat_input("Ask a question about cars or credit policy..."):
         st.session_state.user_question = user_input
         save_chat_to_history(st.session_state.current_chat_id, "user", user_input)
@@ -935,45 +1019,125 @@ def main():
         with chat_container:
             with st.chat_message("user"):
                 st.markdown(user_input)
+
         with st.spinner("Analyzing your question..."):
             reformulated_question, detected_data_source, _ = route_query_to_appropriate_chain(user_input)
+
         with chat_container:
             with st.chat_message("assistant"):
-                message_placeholder = st.empty()
-                message_placeholder.markdown("Processing your question...")
+                assistant_response_content = ""
+                image_url_to_display = None
+
                 if detected_data_source == "Car Rate":
+                    processing_placeholder = st.empty()
+                    processing_placeholder.markdown("Processing your question...")
+
                     car_chain = build_car_rag_chain()
                     if not car_chain or car_data.empty:
-                        response = "Sorry, I can't access car price information at the moment. Please try again later."
+                        assistant_response_content = "Sorry, I can't access car price information at the moment. Please try again later."
                     else:
-                        response = car_chain.invoke(reformulated_question) or "I couldn't find specific information about this car model or price."
-                        if len(response) >= 10:
-                            product_group, gcode = extract_vehicle_info(response, car_data)
-                            response = build_car_response(response, product_group, gcode)
-                    for i in range(len(response)):
-                        message_placeholder.markdown(response[:i + 1])
-                        time.sleep(0.015)
-                    save_chat_to_history(st.session_state.current_chat_id, "assistant", response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
+                        response = car_chain.invoke(reformulated_question)
+                        assistant_response_content = response or "I couldn't find specific information about this car model or price."
+                        if assistant_response_content and \
+                           "No relevant information found" not in assistant_response_content and \
+                           "ไม่พบข้อมูลที่เกี่ยวข้อง" not in assistant_response_content:
+                            extracted_model, extracted_year = extract_car_details_for_image(assistant_response_content)
+                            if extracted_model and extracted_year:
+                                image_url_to_display = get_car_image_url(extracted_model, extracted_year)
+
+                    processing_placeholder.empty()
+
+                    if image_url_to_display:
+                        st.markdown(
+                            f'<div style="text-align: center;">'
+                            f'<img src="{image_url_to_display}" width="600" style="margin-bottom: 10px;">'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+
+                    if assistant_response_content:
+                         text_placeholder = st.empty()
+                         streamed_text = ""
+                         for i in range(len(assistant_response_content)):
+                              text_placeholder.markdown(assistant_response_content[:i + 1] + "▌")
+                              streamed_text = assistant_response_content[:i + 1]
+                              time.sleep(0.015)
+                         text_placeholder.markdown(streamed_text)
+                    else:
+                         st.markdown("...")
+
                     st.session_state.detected_mode = "Car Rate"
                     display_resource_cards()
+
                 else:
+                    message_placeholder = st.empty()
+                    message_placeholder.markdown("Processing your question...")
+
                     policy_chain = load_policy_data()
                     if not policy_chain:
-                        response = "Sorry, I can't access credit policy information at the moment. Please try again later."
+                        assistant_response_content = "Sorry, I can't access credit policy information at the moment. Please try again later."
                     else:
                         response = policy_chain.invoke({"input": reformulated_question})
                         answer = response.get("answer", "I couldn't find specific information about this policy.")
                         sources = {doc.metadata.get("source") for doc in response.get("context", []) if hasattr(doc, "metadata")}
                         source_text = "\n\n---\n**Reference Source:**" + ("\n" + "\n".join(f"- {source}" for source in sources) if sources else "\n- No specific sources found")
-                        response = answer + source_text
-                    for i in range(len(response)):
-                        message_placeholder.markdown(response[:i + 1])
-                        time.sleep(0.02)
-                    save_chat_to_history(st.session_state.current_chat_id, "assistant", response)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
+                        assistant_response_content = answer + source_text
+
+                    if assistant_response_content:
+                        streamed_text = ""
+                        message_placeholder.empty()
+                        for i in range(len(assistant_response_content)):
+                            message_placeholder.markdown(assistant_response_content[:i + 1] + "▌")
+                            streamed_text = assistant_response_content[:i + 1]
+                            time.sleep(0.02)
+                        message_placeholder.markdown(streamed_text)
+                    else:
+                        message_placeholder.markdown("...")
+
                     st.session_state.detected_mode = "Credit Policy"
                     display_resource_cards()
+
+                message_to_save = {
+                    "role": "assistant",
+                    "content": assistant_response_content
+                }
+                
+                if detected_data_source == "Car Rate" and image_url_to_display:
+                    message_to_save["image_url"] = image_url_to_display
+
+                save_chat_to_history(
+                    st.session_state.current_chat_id,
+                    "assistant",
+                    assistant_response_content,
+                    image_url=(image_url_to_display if detected_data_source == "Car Rate" else None)
+                )
+                st.session_state.messages.append(message_to_save)
+
+def save_chat_to_history(chat_id, role, content, image_url=None):
+    history = load_chat_history()
+    
+    if "chats" not in history:
+        history["chats"] = {}
+        
+    if chat_id not in history["chats"]:
+        history["chats"][chat_id] = {
+            "messages": [],
+            "created_at": str(pd.Timestamp.now())
+        }
+    elif "messages" not in history["chats"][chat_id]:
+        history["chats"][chat_id]["messages"] = []
+
+    message_data = {
+        "role": role,
+        "content": content,
+        "timestamp": str(pd.Timestamp.now())
+    }
+    
+    if image_url:
+        message_data["image_url"] = image_url
+
+    history["chats"][chat_id]["messages"].append(message_data)
+    save_chat_history(history)
 
 if __name__ == "__main__":
     main()
