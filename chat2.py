@@ -502,7 +502,7 @@ def load_policy_data():
             
         retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
         llm = load_llm()
-        
+
         class DynamicChain:
             def __init__(self, retriever, llm):
                 self.retriever = retriever
