@@ -476,7 +476,7 @@ def load_llm():
         openai_api_version="2024-12-01-preview",
         azure_deployment="dataiku-ssci-gpt-4o",
         temperature=1.0,
-        max_tokens=4096,
+        max_tokens=8192,
     )
 
 @st.cache_resource
