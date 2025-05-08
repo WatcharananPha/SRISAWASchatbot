@@ -26,8 +26,8 @@ COPY chat2.py .
 
 # Create and set permissions for run script
 RUN echo '#!/bin/bash\n\
-cd /app\n\
-streamlit run chat2.py --server.port=8502 --server.address=0.0.0.0' > /app/run.sh \
+    cd /app\n\
+    streamlit run chat2.py --server.port=8502 --server.address=0.0.0.0' > /app/run.sh \
     && chmod +x /app/run.sh
 
 # Copy remaining files

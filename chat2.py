@@ -5,6 +5,7 @@ import time
 import pandas as pd
 import re 
 import nest_asyncio
+
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_openai import AzureChatOpenAI
@@ -390,7 +391,7 @@ def build_car_rag_chain():
             ```
             (หากไม่พบข้อมูล ให้ใช้ "Not specified" หรือ "N/A". หากไม่มี Description ให้ใส่ Code อย่างเดียว หรือ Code กับ `()`)
 
-    5.  **กรณีไม่พบข้อมูลเลย:** หากไม่พบข้อมูลใดๆ ใน `{context}` ที่เกี่ยวข้องกับรถยนต์ที่ถามเลย ให้ตอบเพียงแค่: "ไม่พบข้อมูลที่เกี่ยวข้อง" (สำหรับคำถามภาษาไทย) หรือ "No relevant information found" (สำหรับคำถามภาษาอังกฤษ) **ห้าม**ใช้รูปแบบในข้อ 3
+    5.  **กรณีไม่พบข้อมูลเลย:** หากไม่พบข้อมูลใดๆ ใน `{context}` ที่เกี่ยวข้องกับรถยนต์ที่ถามเลย ให้ตอบเพียงแค่: "ไม่พบข้อมูล" (สำหรับคำถามภาษาไทย) หรือ "No relevant information found" (สำหรับคำถามภาษาอังกฤษ) **ห้าม**ใช้รูปแบบในข้อ 3
 
     **Answer:**
     """
