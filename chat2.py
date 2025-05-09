@@ -5,6 +5,7 @@ import time
 import pandas as pd
 import re 
 import nest_asyncio
+from dotenv import load_dotenv
 
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
@@ -17,9 +18,10 @@ from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
 
 nest_asyncio.apply()
+load_dotenv()
 
-os.environ["AZURE_OPENAI_API_KEY"] = 'd8e93330e8384f06aa1c8ace726af49e'
-os.environ["AZURE_OPENAI_ENDPOINT"] = 'https://dataiku-gpt4ommi.openai.azure.com/'
+api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+api_endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
 
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
 JSON_PATH = "Jsonfile/M.JSON"
@@ -210,10 +212,13 @@ def analyze_question_agent(user_input):
         return data_source, user_input, reasoning
     llm = AzureChatOpenAI(
         openai_api_version="2024-12-01-preview",
-        azure_deployment="dataiku-ssci-gpt-4o", 
-        temperature=1.0, 
-        max_tokens=4096,  
+        azure_deployment="dataiku-ssci-gpt-4o",
+        temperature=0.7, 
+        max_tokens=4096,
+        azure_endpoint=api_endpoint,
+        api_key=api_key,
     )
+
     template = """
     You are an AI agent responsible for analyzing user questions and determining whether they should be directed to 
     the Car Rate book search or Credit Policy search. 
@@ -293,9 +298,12 @@ def build_car_rag_chain():
     llm = AzureChatOpenAI(
         openai_api_version="2024-12-01-preview",
         azure_deployment="dataiku-ssci-gpt-4o",
-        temperature=1.0,
-        max_tokens=8192, 
+        temperature=0.7,
+        max_tokens=8192,
+        azure_endpoint=api_endpoint,
+        api_key=api_key,
     )
+
     template = """
     คุณคือ AI ผู้ช่วยเชี่ยวชาญด้านข้อมูลราคารถยนต์ของศรีสวัสดิ์ (Srisawad's car pricing information) หน้าที่ของคุณคือตอบคำถามเกี่ยวกับราคารถยนต์โดยใช้ข้อมูลที่ให้ไว้ใน 'Relevant car pricing information (Context)' เท่านั้น โดยอ้างอิง **โครงสร้างข้อมูลและ Mapping ที่ให้ไว้ด้านล่างนี้** เพื่อทำความเข้าใจข้อมูลใน Context และต้องตอบในรูปแบบที่กำหนดด้านล่างนี้อย่างเคร่งครัด
 
@@ -550,6 +558,8 @@ def load_llm():
         azure_deployment="dataiku-ssci-gpt-4o",
         temperature=1.0,
         max_tokens=8192,
+        azure_endpoint=api_endpoint,
+        api_key=api_key,
     )
 
 @st.cache_resource
@@ -992,7 +1002,7 @@ def main():
     st.markdown(
         """
         <div style="text-align: center;">
-            <img src="https://cdn-cncpm.nitrocdn.com/DpTaQVKLCVHUePohOhFgtgFLWoUOmaMZ/assets/images/optimized/rev-5be2389/www.sawad.co.th/wp-content/uploads/2020/12/logo.png" width="250">
+            <img src="https://hoonsmart.com/wp-content/uploads/2018/04/SAWAD-1024x438.png" width="300">
             <h1 style="font-size: 40px; font-weight: bold; margin-top: 10px;">Srisawad Chatbot</h1>
         </div>
         """,
