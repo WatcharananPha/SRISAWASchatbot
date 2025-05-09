@@ -27,8 +27,6 @@ EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
 JSON_PATH = "Jsonfile/M.JSON"
 CHAT_HISTORY_FILE = "chat_history_policy.json"
 EXCEL_FILE_PATH = r'Data real/Car rate book.xlsx'
-VECTOR_STORE_PATH = "car_rate_vectorstore"
-VECTOR_STORE_PATH_POLICY = "carpolicyindex"
 
 st.set_page_config(
     page_title="Srisawad Chat",
