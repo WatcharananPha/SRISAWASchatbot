@@ -270,8 +270,28 @@ def create_embeddings_model():
         query_instruction="Represent this query for retrieving relevant documents: "
     )
 
+def check_vector_store_exists(vector_store_path):
+    if os.path.exists(vector_store_path):
+        index_file = os.path.join(vector_store_path, "index.faiss")
+        pkl_file = os.path.join(vector_store_path, "index.pkl")
+        if os.path.exists(index_file) and os.path.exists(pkl_file):
+            return True
+    return False
+
+def create_or_load_vector_store(documents, embed_model, vector_store_path):
+    if check_vector_store_exists(vector_store_path):
+        vectorstore = FAISS.load_local(
+            vector_store_path, 
+            embed_model,
+            allow_dangerous_deserialization=True
+        )
+    else:
+        vectorstore = FAISS.from_documents(documents, embed_model)
+        vectorstore.save_local(vector_store_path)
+    return vectorstore
+
 def load_or_create_faiss_index(documents, embed_model, index_path):
-    if os.path.exists(index_path):
+    if check_vector_store_exists(index_path):
         vectorstore = FAISS.load_local(
             index_path, 
             embed_model,
